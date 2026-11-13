@@ -1,0 +1,1 @@
+ALTER TABLE public.orders ADD COLUMN last_query_at TIMESTAMPTZ;

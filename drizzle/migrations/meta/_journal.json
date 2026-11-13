@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1794380511388,
+      "tag": "0000_designs_and_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794383855770,
+      "tag": "0001_orders_last_query_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794544668104,
+      "tag": "0002_design_gallery_and_description",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794546761102,
+      "tag": "0003_admin_dashboard",
+      "breakpoints": true
+    }
+  ]
+}

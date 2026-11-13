@@ -1,11 +1,24 @@
-<div align="center">
+# M-Pesa Design Downloads
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+the mpesa checkout do not work, how can I add the daraja apis and after the mpesa transaction is successfully one is allowed to download a design in a pdf formart or in two other more formart of his choice. the designs will be stored in the directory
 
-  <h1>Built with AI Studio</h2>
+This project was built with [Lovable](https://lovable.dev).
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## Build with Lovable
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/2c751e1e-cc1f-4c13-b227-92584b03bdf7).
 
-</div>
+- **Ship faster**: describe what you want to build and Lovable handles the code.
+- **Stay in sync**: every change made in Lovable is committed straight to this repository.
+- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+
+## Development
+
+Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+
+```sh
+git clone <this-repository-url>
+cd <repository-name>
+npm i
+npm run dev
+```
