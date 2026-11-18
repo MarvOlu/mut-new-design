@@ -61,6 +61,12 @@ function getPrivateMap<T>(raw: Record<string, unknown>, key: string): Record<str
   return { ...(val as Record<string, T>) };
 }
 
+async function useLocalFallback(context: AuthContext): Promise<boolean> {
+  if (context.isLocalMode) return true;
+  const { checkSupabaseAdminHealth } = await import("@/integrations/supabase/client.server");
+  return !(await checkSupabaseAdminHealth());
+}
+
 async function resolveCallerRole(
   context: AuthContext,
 ): Promise<{ role: UserRole; email: string | null }> {
@@ -80,7 +86,13 @@ async function resolveCallerRole(
   });
   if (hasAdminRpc) return { role: "admin", email };
 
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { checkSupabaseAdminHealth, supabaseAdmin } =
+    await import("@/integrations/supabase/client.server");
+  if (!(await checkSupabaseAdminHealth())) {
+    const store = await import("./local-store.server");
+    return { role: store.getRoleForEmail(email), email };
+  }
+
   if (email) {
     const { data: adminRow } = await supabaseAdmin
       .from("admin_emails")
@@ -115,7 +127,7 @@ export const adminGetDashboardSnapshot = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { role } = await resolveCallerRole(context);
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       return {
         role,
@@ -204,7 +216,7 @@ export const adminGetOrderDetail = createServerFn({ method: "POST" })
   .inputValidator((input) => z.object({ orderId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     await resolveCallerRole(context);
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       return store.getAdminOrderDetail(data.orderId);
     }
@@ -254,7 +266,7 @@ export const adminCheckPayment = createServerFn({ method: "POST" })
         message: "Only authenticated admins can check or update orders.",
       };
 
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       const order = store.getOrder(data.orderId);
       if (!order) return { ok: false as const, message: "Order not found." };
@@ -323,7 +335,7 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (!(await isAdminCaller(context)))
       return { ok: false as const, message: "Only authenticated admins can update orders." };
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       const updated = store.updateOrder(data.orderId, {
         status: data.status,
@@ -370,7 +382,7 @@ export const adminListDesigns = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await resolveCallerRole(context);
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       return store.listAllDesigns().map((d) => ({
         ...d,
@@ -420,7 +432,7 @@ export const adminSaveDesign = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (!(await isAdminCaller(context)))
       return { ok: false as const, message: "Only authenticated admins can edit designs." };
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       const saved = store.saveDesign(data);
       return { ok: true as const, design: saved };
@@ -485,7 +497,7 @@ export const adminReorderDesigns = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (!(await isAdminCaller(context)))
       return { ok: false as const, message: "Only authenticated admins can reorder designs." };
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       store.reorderDesigns(data.orderedIds);
       return { ok: true as const };
@@ -508,7 +520,7 @@ export const adminDeleteDesign = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (!(await isAdminCaller(context)))
       return { ok: false as const, message: "Only authenticated admins can delete designs." };
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       return store.deleteDesign(data.designId);
     }
@@ -542,7 +554,7 @@ export const adminUploadImage = createServerFn({ method: "POST" })
     const cleanBase64 = data.base64.includes(",") ? data.base64.split(",")[1]! : data.base64;
     const bytes = Uint8Array.from(Buffer.from(cleanBase64, "base64"));
 
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       const { storagePath, meta } = store.saveUploadedImage(data.fileName, bytes, {
         contentType: data.contentType,
@@ -606,7 +618,7 @@ export const adminListMedia = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<StoredImageMeta[]> => {
     await resolveCallerRole(context);
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       return store.listImageMetadata();
     }
@@ -685,7 +697,7 @@ export const adminUpdateImageMeta = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (!(await isAdminCaller(context)))
       return { ok: false as const, message: "Only authenticated admins can edit image metadata." };
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       const updated = store.updateImageMetadata(data.key, data);
       if (data.designId && data.description !== undefined) {
@@ -746,7 +758,7 @@ export const adminDeleteImage = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (!(await isAdminCaller(context)))
       return { ok: false as const, message: "Only authenticated admins can delete images." };
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       const res = store.deleteUploadedImage(data.key);
       return { ok: true as const, ...res };
@@ -803,7 +815,7 @@ export const adminListDesignFiles = createServerFn({ method: "POST" })
   .inputValidator((input) => z.object({ designId: z.string().min(1).max(80) }).parse(input))
   .handler(async ({ data, context }) => {
     await resolveCallerRole(context);
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       return store.listDesignUploadedFiles(data.designId);
     }
@@ -843,7 +855,7 @@ export const adminUploadDesignFile = createServerFn({ method: "POST" })
     const cleanBase64 = data.base64.includes(",") ? data.base64.split(",")[1]! : data.base64;
     const bytes = Uint8Array.from(Buffer.from(cleanBase64, "base64"));
 
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       const saved = store.saveUploadedDesignFile(data.designId, data.fileName, bytes);
       return { ok: true as const, file: saved };
@@ -872,7 +884,7 @@ export const adminDeleteDesignFile = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (!(await isAdminCaller(context)))
       return { ok: false as const, message: "Only authenticated admins can delete design files." };
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       store.deleteUploadedDesignFile(data.designId, data.fileName);
       return { ok: true as const };
@@ -894,7 +906,7 @@ export const adminListCategories = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<AdminCategoryRow[]> => {
     await resolveCallerRole(context);
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       const cats = store.listCategories();
       const designs = store.listAllDesigns();
@@ -932,7 +944,7 @@ export const adminSaveCategory = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (!(await isAdminCaller(context)))
       return { ok: false as const, message: "Only authenticated admins can edit categories." };
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       return store.saveCategory(data);
     }
@@ -972,7 +984,7 @@ export const adminReorderCategories = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (!(await isAdminCaller(context)))
       return { ok: false as const, message: "Only authenticated admins can reorder categories." };
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       store.reorderCategories(data.orderedNames);
       return { ok: true as const };
@@ -995,7 +1007,7 @@ export const adminDeleteCategory = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (!(await isAdminCaller(context)))
       return { ok: false as const, message: "Only authenticated admins can delete categories." };
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       return store.deleteCategory(data.name);
     }
@@ -1009,7 +1021,7 @@ export const adminGetSiteContent = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await resolveCallerRole(context);
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       return store.getSiteContentState();
     }
@@ -1046,7 +1058,7 @@ export const adminSaveSiteContent = createServerFn({ method: "POST" })
         ok: false as const,
         message: "Only authenticated admins can publish website changes.",
       };
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       const saved = store.saveSiteContentState(data);
       return { ok: true as const, ...saved };
@@ -1078,7 +1090,7 @@ export const adminGetAccessControl = createServerFn({ method: "GET" })
       context,
     }): Promise<{ myRole: UserRole; myEmail: string | null; members: RoleMember[] }> => {
       const caller = await resolveCallerRole(context);
-      if (context.isLocalMode) {
+      if (await useLocalFallback(context)) {
         const store = await import("./local-store.server");
         return {
           myRole: caller.role,
@@ -1164,7 +1176,7 @@ export const adminSaveRoleMember = createServerFn({ method: "POST" })
       return { ok: false as const, message: "Primary shop owner accounts must remain admins." };
     }
 
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       return store.saveRoleMember(cleanEmail, data.role, caller.email);
     }
@@ -1214,7 +1226,7 @@ export const adminDeleteRoleMember = createServerFn({ method: "POST" })
       return { ok: false as const, message: "You cannot remove your own active admin account." };
     }
 
-    if (context.isLocalMode) {
+    if (await useLocalFallback(context)) {
       const store = await import("./local-store.server");
       return store.deleteRoleMember(cleanEmail);
     }

@@ -5,19 +5,29 @@ import { friendlyResult, nairobiTimestamp, stkPassword } from "./mpesa";
 const SANDBOX_SHORTCODE = "174379";
 const SANDBOX_PASSKEY = "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
 
+function cleanEnv(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const cleaned = value
+    .trim()
+    .replace(/^["'](.*)["']$/, "$1")
+    .trim();
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
 export function getMpesaConfig() {
-  const isProduction = process.env["MPESA_ENV"] === "production";
+  const isProduction = cleanEnv(process.env["MPESA_ENV"]) === "production";
   const config = {
     isProduction,
     baseUrl: isProduction ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke",
-    consumerKey: process.env["MPESA_CONSUMER_KEY"],
-    consumerSecret: process.env["MPESA_CONSUMER_SECRET"],
-    shortcode: process.env["MPESA_SHORTCODE"] || (isProduction ? undefined : SANDBOX_SHORTCODE),
-    passkey: process.env["MPESA_PASSKEY"] || (isProduction ? undefined : SANDBOX_PASSKEY),
+    consumerKey: cleanEnv(process.env["MPESA_CONSUMER_KEY"]),
+    consumerSecret: cleanEnv(process.env["MPESA_CONSUMER_SECRET"]),
+    shortcode:
+      cleanEnv(process.env["MPESA_SHORTCODE"]) || (isProduction ? undefined : SANDBOX_SHORTCODE),
+    passkey: cleanEnv(process.env["MPESA_PASSKEY"]) || (isProduction ? undefined : SANDBOX_PASSKEY),
     // "CustomerPayBillOnline" for Paybill, "CustomerBuyGoodsOnline" for Till numbers.
-    transactionType: process.env["MPESA_TRANSACTION_TYPE"] || "CustomerPayBillOnline",
+    transactionType: cleanEnv(process.env["MPESA_TRANSACTION_TYPE"]) || "CustomerPayBillOnline",
     // For Till numbers the money goes to the till, which can differ from the store shortcode.
-    partyB: process.env["MPESA_PARTY_B"],
+    partyB: cleanEnv(process.env["MPESA_PARTY_B"]),
   };
   const missing = [
     !config.consumerKey && "MPESA_CONSUMER_KEY",

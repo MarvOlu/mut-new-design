@@ -4,11 +4,20 @@ import { friendlyResult, parseStkCallback } from "@/lib/mpesa";
 
 const accepted = () => Response.json({ ResultCode: 0, ResultDesc: "Accepted" });
 
+function cleanEnv(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const cleaned = value
+    .trim()
+    .replace(/^["'](.*)["']$/, "$1")
+    .trim();
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
 export const Route = createFileRoute("/api/public/payments/callback")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const expected = process.env["PAYMENT_CALLBACK_TOKEN"];
+        const expected = cleanEnv(process.env["PAYMENT_CALLBACK_TOKEN"]);
         const token = new URL(request.url).searchParams.get("token");
         if (!expected || token !== expected) return new Response("Forbidden", { status: 403 });
 
@@ -16,9 +25,9 @@ export const Route = createFileRoute("/api/public/payments/callback")({
         const cb = parseStkCallback(body);
         if (!cb) return accepted();
 
-        const { isSupabaseAdminConfigured, supabaseAdmin } =
+        const { checkSupabaseAdminHealth, supabaseAdmin } =
           await import("@/integrations/supabase/client.server");
-        if (!isSupabaseAdminConfigured()) {
+        if (!(await checkSupabaseAdminHealth())) {
           const store = await import("@/lib/local-store.server");
           const order = store.getOrderByCheckoutId(cb.checkoutRequestId);
           if (!order || order.status !== "pending") return accepted();

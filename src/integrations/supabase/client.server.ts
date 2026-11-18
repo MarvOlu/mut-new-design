@@ -60,3 +60,34 @@ export const supabaseAdmin = new Proxy({} as ReturnType<typeof createSupabaseAdm
     return Reflect.get(_supabaseAdmin, prop, receiver);
   },
 });
+
+let healthCache: { ok: boolean; checkedAt: number } | null = null;
+const HEALTH_TTL_MS = 60_000;
+
+export function markSupabaseAdminUnhealthy() {
+  healthCache = { ok: false, checkedAt: Date.now() };
+}
+
+/**
+ * Verifies that SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are not only set,
+ * but actually accepted by Supabase (e.g. catches invalid/rotated service keys).
+ */
+export async function checkSupabaseAdminHealth(): Promise<boolean> {
+  if (!isSupabaseAdminConfigured()) return false;
+  if (healthCache && Date.now() - healthCache.checkedAt < HEALTH_TTL_MS) {
+    return healthCache.ok;
+  }
+  try {
+    const { error } = await supabaseAdmin.from("designs").select("id").limit(1);
+    const ok = !error;
+    if (!ok) {
+      console.warn("[Supabase Admin] Key check failed, using local store fallback:", error.message);
+    }
+    healthCache = { ok, checkedAt: Date.now() };
+    return ok;
+  } catch (e) {
+    console.warn("[Supabase Admin] Health probe failed, using local store fallback:", e);
+    healthCache = { ok: false, checkedAt: Date.now() };
+    return false;
+  }
+}

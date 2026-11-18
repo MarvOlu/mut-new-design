@@ -51,15 +51,33 @@ export function BasketProvider({ children }: { children: ReactNode }) {
   const [ids, setIds] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState(false);
-  const { data: designs = [] } = useQuery(designsQuery);
+  const { data: designs = [], isSuccess } = useQuery(designsQuery);
 
   useEffect(() => {
-    setIds(parseStoredBasket(window.localStorage.getItem(STORAGE_KEY)));
+    try {
+      setIds(parseStoredBasket(window.localStorage.getItem(STORAGE_KEY)));
+    } catch {
+      setIds([]);
+    }
     setLoaded(true);
   }, []);
 
   useEffect(() => {
-    if (loaded) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+    if (!loaded || !isSuccess) return;
+    const validIds = new Set(designs.map((d) => d.id));
+    setIds((prev) => {
+      const filtered = prev.filter((id) => validIds.has(id));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [loaded, isSuccess, designs]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+    } catch {
+      // Ignore storage restrictions in sandboxed iframes
+    }
   }, [ids, loaded]);
 
   const add = useCallback((id: string) => setIds((b) => addToBasket(b, id)), []);

@@ -3,8 +3,14 @@
 /** Converts 07xx / 01xx / +254 / 254 numbers to the 2547XXXXXXXX form Daraja expects. */
 export function formatKenyanPhone(input: string | null | undefined): string | null {
   if (!input) return null;
-  const phone = String(input).trim().replace(/[\s-]/g, "");
+  let phone = String(input)
+    .replace(/[\u200B-\u200F\u202A-\u202E\uFEFF\u00A0]/g, "")
+    .trim()
+    .replace(/[\s().-]/g, "");
+  if (phone.startsWith("00254")) phone = "+" + phone.slice(2);
   if (/^0[17]\d{8}$/.test(phone)) return "254" + phone.slice(1);
+  if (/^\+2540[17]\d{8}$/.test(phone)) return "254" + phone.slice(5);
+  if (/^2540[17]\d{8}$/.test(phone)) return "254" + phone.slice(4);
   if (/^\+254[17]\d{8}$/.test(phone)) return phone.slice(1);
   if (/^254[17]\d{8}$/.test(phone)) return phone;
   if (/^[17]\d{8}$/.test(phone)) return "254" + phone;

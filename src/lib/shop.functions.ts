@@ -53,24 +53,48 @@ function publicClient() {
   });
 }
 
+function cleanEnv(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const cleaned = value
+    .trim()
+    .replace(/^["'](.*)["']$/, "$1")
+    .trim();
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
 async function admin() {
-  const { isSupabaseAdminConfigured, supabaseAdmin } =
+  const { checkSupabaseAdminHealth, supabaseAdmin } =
     await import("@/integrations/supabase/client.server");
-  return isSupabaseAdminConfigured() ? supabaseAdmin : null;
+  return (await checkSupabaseAdminHealth()) ? supabaseAdmin : null;
+}
+
+async function hasSupabaseBackend(): Promise<boolean> {
+  if (!hasPublicSupabase()) return false;
+  const { checkSupabaseAdminHealth } = await import("@/integrations/supabase/client.server");
+  return checkSupabaseAdminHealth();
 }
 
 function callbackUrl(): string {
-  const token = process.env["PAYMENT_CALLBACK_TOKEN"] ?? "";
-  const candidates = [process.env["SITE_URL"], new URL(getRequest().url).origin];
+  const token = cleanEnv(process.env["PAYMENT_CALLBACK_TOKEN"]) ?? "";
+  const req = getRequest();
+  const reqUrl = new URL(req.url);
+  const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const forwardedOrigin =
+    forwardedProto && forwardedHost ? `${forwardedProto}://${forwardedHost}` : undefined;
+  const candidates = [cleanEnv(process.env["SITE_URL"]), forwardedOrigin, reqUrl.origin];
   const origin = candidates
     .map((o) => o?.replace(/\/+$/, ""))
-    .find((o) => !!o && o.startsWith("https://") && !o.includes("--"));
+    .find(
+      (o) =>
+        !!o && o.startsWith("https://") && !o.includes("--") && !o.toLowerCase().includes("mpesa"),
+    );
   if (!origin) {
-    const projectId = process.env["SUPABASE_PROJECT_ID"];
+    const projectId = cleanEnv(process.env["SUPABASE_PROJECT_ID"]);
     if (projectId) return `https://${projectId}.supabase.co/functions/v1/payments-callback`;
-    return `${new URL(getRequest().url).origin}/api/public/payments/callback?token=${encodeURIComponent(token)}`;
+    return `${reqUrl.origin}/api/public/payments/callback${token ? `?token=${encodeURIComponent(token)}` : ""}`;
   }
-  return `${origin}/api/public/payments/callback?token=${encodeURIComponent(token)}`;
+  return `${origin}/api/public/payments/callback${token ? `?token=${encodeURIComponent(token)}` : ""}`;
 }
 
 async function listFormats(
@@ -122,7 +146,7 @@ async function readSupabaseImageCaptions(): Promise<Record<string, Record<string
 
 export const listDesigns = createServerFn({ method: "GET" }).handler(
   async (): Promise<Design[]> => {
-    if (!hasPublicSupabase()) {
+    if (!(await hasSupabaseBackend())) {
       const store = await import("./local-store.server");
       return store.listActiveDesigns();
     }
@@ -144,7 +168,7 @@ export const listDesigns = createServerFn({ method: "GET" }).handler(
 
 export const listCategories = createServerFn({ method: "GET" }).handler(
   async (): Promise<Category[]> => {
-    if (!hasPublicSupabase()) {
+    if (!(await hasSupabaseBackend())) {
       const store = await import("./local-store.server");
       return store.listCategories();
     }
@@ -163,7 +187,7 @@ export const listCategories = createServerFn({ method: "GET" }).handler(
 export const getSiteContent = createServerFn({ method: "GET" }).handler(
   async (): Promise<SiteContent> => {
     try {
-      if (!hasPublicSupabase()) {
+      if (!(await hasSupabaseBackend())) {
         const store = await import("./local-store.server");
         return store.getSiteContentState().content;
       }
@@ -183,7 +207,7 @@ export const getSiteContent = createServerFn({ method: "GET" }).handler(
 export const getDesignDetail = createServerFn({ method: "GET" })
   .inputValidator((input) => z.object({ designId: z.string().min(1).max(80) }).parse(input))
   .handler(async ({ data }): Promise<{ design: Design; formats: DownloadFormat[] } | null> => {
-    if (!hasPublicSupabase()) {
+    if (!(await hasSupabaseBackend())) {
       const store = await import("./local-store.server");
       const design = store.getActiveDesign(data.designId);
       if (!design) return null;
@@ -214,7 +238,7 @@ export const startCheckout = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z
       .object({
-        phone: z.string().min(9).max(16),
+        phone: z.string().trim().min(7).max(32),
         designIds: z.array(z.string().min(1).max(80)).min(1).max(30),
       })
       .parse(input),
@@ -239,7 +263,19 @@ export const startCheckout = createServerFn({ method: "POST" })
 
     if (!db) {
       const store = await import("./local-store.server");
-      const active = store.listActiveDesigns().filter((d) => ids.includes(d.id));
+      let active = store.listActiveDesigns().filter((d) => ids.includes(d.id));
+      if (active.length !== ids.length && hasPublicSupabase()) {
+        const missingIds = ids.filter((id) => !active.some((d) => d.id === id));
+        const { data: pubDesigns } = await publicClient()
+          .from("designs")
+          .select("id, name, category, price, unit, tag, image_key, images, description")
+          .in("id", missingIds)
+          .eq("is_active", true);
+        for (const pd of pubDesigns ?? []) {
+          store.saveDesign({ ...pd, is_active: true });
+        }
+        active = store.listActiveDesigns().filter((d) => ids.includes(d.id));
+      }
       if (active.length !== ids.length) {
         return {
           ok: false as const,
@@ -277,7 +313,19 @@ export const startCheckout = createServerFn({ method: "POST" })
       .select("id, price")
       .in("id", ids)
       .eq("is_active", true);
-    if (error || !designs || designs.length !== ids.length) {
+    if (error) {
+      console.error("Checkout design lookup error:", error.message);
+      if (/api key|jwt|unauthorized/i.test(error.message)) {
+        const { markSupabaseAdminUnhealthy } =
+          await import("@/integrations/supabase/client.server");
+        markSupabaseAdminUnhealthy();
+      }
+      return {
+        ok: false as const,
+        message: "Could not verify your selected designs. Please try again.",
+      };
+    }
+    if (!designs || designs.length !== ids.length) {
       return {
         ok: false as const,
         message: "Some designs in your basket are no longer available.",

@@ -29,19 +29,27 @@ export function BasketSheet({
   const navigate = useNavigate();
   const checkout = useServerFn(startCheckout);
   const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const total = items.reduce((s, d) => s + d.price, 0);
-  const phoneValid = !!formatKenyanPhone(phone);
+  const formattedPhone = formatKenyanPhone(phone);
 
   async function pay() {
-    if (!phoneValid) {
-      toast.error("Enter a valid Kenyan phone number, e.g. 0712345678.");
+    if (!items.length || busy) return;
+    if (!formattedPhone) {
+      const msg = "Enter a valid Kenyan phone number, e.g. 0712345678 or +254712345678.";
+      setPhoneError(msg);
+      toast.error(msg);
       return;
     }
+    setPhoneError(null);
     setBusy(true);
     try {
-      const res = await checkout({ data: { phone, designIds: items.map((d) => d.id) } });
+      const res = await checkout({
+        data: { phone: formattedPhone, designIds: items.map((d) => d.id) },
+      });
       if (!res.ok) {
+        setPhoneError(res.message);
         toast.error(res.message);
         return;
       }
@@ -94,7 +102,13 @@ export function BasketSheet({
           ))}
         </div>
 
-        <div className="space-y-4 border-t border-border bg-muted p-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void pay();
+          }}
+          className="space-y-4 border-t border-border bg-muted p-6"
+        >
           <div className="flex items-center justify-between font-display text-lg font-bold">
             <span>Total</span>
             <span>{formatKsh(total)}</span>
@@ -106,30 +120,42 @@ export function BasketSheet({
               <Input
                 id="mpesa-phone"
                 type="tel"
-                inputMode="numeric"
+                inputMode="tel"
                 autoComplete="tel"
-                placeholder="0712345678"
-                maxLength={13}
+                placeholder="0712345678 or +254712345678"
+                maxLength={24}
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  if (phoneError) setPhoneError(null);
+                }}
+                aria-invalid={!!phoneError}
                 className="h-12 rounded-full bg-card pl-9 text-base"
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              This phone will receive the M-PESA prompt.
-            </p>
+            {phoneError ? (
+              <p className="text-xs font-medium text-destructive">{phoneError}</p>
+            ) : formattedPhone ? (
+              <p className="text-xs font-medium text-success">
+                M-PESA prompt will be sent to {formattedPhone}.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                This phone will receive the M-PESA prompt (e.g. 0712345678 or 0112345678).
+              </p>
+            )}
           </div>
           <Button
+            type="submit"
             variant="mpesa"
             size="xl"
             className="w-full"
             disabled={!items.length || busy}
-            onClick={pay}
           >
             {busy ? <Loader2 className="animate-spin" /> : null}
             {busy ? "Sending M-PESA prompt…" : `Pay ${formatKsh(total)} with M-PESA`}
           </Button>
-        </div>
+        </form>
       </SheetContent>
     </Sheet>
   );

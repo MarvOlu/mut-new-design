@@ -10,10 +10,17 @@ import {
 } from "@/lib/mpesa";
 
 describe("M-PESA phone numbers", () => {
-  it("converts 07 and 01 numbers to 254 format", () => {
+  it("converts 07, 01, +254, 254, 00254, and +2540 numbers to 254 format", () => {
     expect(formatKenyanPhone("0712 345 678")).toBe("254712345678");
     expect(formatKenyanPhone("0112345678")).toBe("254112345678");
     expect(formatKenyanPhone("+254712345678")).toBe("254712345678");
+    expect(formatKenyanPhone("+254 712 345 678")).toBe("254712345678");
+    expect(formatKenyanPhone("+254 (0) 712 345 678")).toBe("254712345678");
+    expect(formatKenyanPhone("+2540712345678")).toBe("254712345678");
+    expect(formatKenyanPhone("2540712345678")).toBe("254712345678");
+    expect(formatKenyanPhone("00254712345678")).toBe("254712345678");
+    expect(formatKenyanPhone("712345678")).toBe("254712345678");
+    expect(formatKenyanPhone("\u202A+254 712 345 678\u202C")).toBe("254712345678");
   });
   it("rejects numbers that are not Kenyan mobiles", () => {
     expect(formatKenyanPhone("12345")).toBeNull();
