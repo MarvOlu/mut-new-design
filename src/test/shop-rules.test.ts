@@ -187,3 +187,35 @@ describe("order dashboard stages", () => {
     ).toBe("rejected");
   });
 });
+
+import {
+  clampCrop,
+  estimateBase64Bytes,
+  fitDimensions,
+  rotatedDimensions,
+} from "@/lib/image-optimizer";
+
+describe("image optimization & editing helpers", () => {
+  it("scales oversized dimensions proportionally within maxDim", () => {
+    expect(fitDimensions(3200, 2400, 1600)).toEqual({ width: 1600, height: 1200 });
+    expect(fitDimensions(800, 600, 1600)).toEqual({ width: 800, height: 600 });
+  });
+
+  it("swaps dimensions on 90/270 degree rotations", () => {
+    expect(rotatedDimensions(1200, 800, 90)).toEqual({ width: 800, height: 1200 });
+    expect(rotatedDimensions(1200, 800, 180)).toEqual({ width: 1200, height: 800 });
+  });
+
+  it("clamps crop boxes inside [0, 1] bounds", () => {
+    expect(clampCrop({ x: -0.2, y: 0.9, width: 0.5, height: 0.5 })).toEqual({
+      x: 0,
+      y: 0.5,
+      width: 0.5,
+      height: 0.5,
+    });
+  });
+
+  it("estimates encoded byte length from base64 data URLs", () => {
+    expect(estimateBase64Bytes("data:image/webp;base64,AAAA")).toBe(3);
+  });
+});

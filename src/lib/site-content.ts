@@ -75,12 +75,16 @@ export function normalizeSections(raw: unknown): SiteSection[] {
 /** Fills in anything missing or broken in the saved content with the defaults. */
 export function resolveSiteContent(raw: unknown): SiteContent {
   const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const content: SiteContent = { ...DEFAULT_SITE_CONTENT, sections: normalizeSections(src["sections"]) };
+  const content: SiteContent = {
+    ...DEFAULT_SITE_CONTENT,
+    sections: normalizeSections(src["sections"]),
+  };
   for (const key of TEXT_KEYS) {
     const v = src[key];
     if (typeof v === "string" && v.trim().length > 0) content[key] = v.slice(0, 400);
   }
-  content.heroImage = typeof src["heroImage"] === "string" && src["heroImage"].trim() ? src["heroImage"] : null;
+  content.heroImage =
+    typeof src["heroImage"] === "string" && src["heroImage"].trim() ? src["heroImage"] : null;
   return content;
 }
 

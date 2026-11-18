@@ -15,12 +15,19 @@ export const Route = createFileRoute("/designs/$designId")({
   loader: async ({ context, params }) => {
     const detail = await context.queryClient.ensureQueryData(designDetailQuery(params.designId));
     if (!detail) throw notFound();
-    return { name: detail.design.name, description: detail.design.description, category: detail.design.category };
+    return {
+      name: detail.design.name,
+      description: detail.design.description,
+      category: detail.design.category,
+    };
   },
   head: ({ loaderData }) => {
-    const title = loaderData ? `${loaderData.name} — Mutken Architectural Designs` : "Design — Mutken Architectural Designs";
+    const title = loaderData
+      ? `${loaderData.name} — Mutken Architectural Designs`
+      : "Design — Mutken Architectural Designs";
     const description =
-      loaderData?.description ?? `${loaderData?.category ?? "Architectural"} design. Pay with M-PESA and download instantly.`;
+      loaderData?.description ??
+      `${loaderData?.category ?? "Architectural"} design. Pay with M-PESA and download instantly.`;
     return {
       meta: [
         { title },
@@ -78,7 +85,11 @@ function DesignPage() {
       <SiteHeader />
 
       <main className="mx-auto max-w-7xl px-4 sm:px-6">
-        <Link to="/" hash="shop" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+        <Link
+          to="/"
+          hash="shop"
+          className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
+        >
           <ArrowLeft className="h-4 w-4" /> All designs
         </Link>
 
@@ -102,12 +113,19 @@ function DesignPage() {
 
           <div className="flex flex-col gap-5">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{design.category}</p>
-              <h1 className="mt-1 text-3xl font-extrabold leading-tight sm:text-4xl">{design.name}</h1>
-              <p className="mt-2 font-display text-2xl font-extrabold text-primary">{formatKsh(design.price)}</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {design.category}
+              </p>
+              <h1 className="mt-1 text-3xl font-extrabold leading-tight sm:text-4xl">
+                {design.name}
+              </h1>
+              <p className="mt-2 font-display text-2xl font-extrabold text-primary">
+                {formatKsh(design.price)}
+              </p>
               {design.unit && <p className="text-sm text-muted-foreground">{design.unit}</p>}
               <p className="mt-4 border-l-4 border-highlight pl-4 leading-relaxed text-foreground/80">
-                {design.description ?? `A ${design.category.toLowerCase()} design by Mutken Architectural Designs, ready to download after payment.`}
+                {design.description ??
+                  `A ${design.category.toLowerCase()} design by Mutken Architectural Designs, ready to download after payment.`}
               </p>
             </div>
 
@@ -125,7 +143,8 @@ function DesignPage() {
                 {inBasket ? "In basket — keep shopping" : "Add to basket"}
               </Button>
               <p className="text-center text-xs text-muted-foreground">
-                Pay with <b className="text-foreground">M-PESA</b>. Downloads unlock as soon as payment succeeds.
+                Pay with <b className="text-foreground">M-PESA</b>. Downloads unlock as soon as
+                payment succeeds.
               </p>
             </div>
 
@@ -152,11 +171,16 @@ function DesignPage() {
                   </dt>
                   <dd>
                     {formatLabels.length === 0 ? (
-                      <span className="text-muted-foreground">Files are being prepared. Call us to confirm formats.</span>
+                      <span className="text-muted-foreground">
+                        Files are being prepared. Call us to confirm formats.
+                      </span>
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {formatLabels.map((label) => (
-                          <span key={label} className="rounded-full border border-border bg-secondary px-3 py-1 text-sm font-semibold text-secondary-foreground">
+                          <span
+                            key={label}
+                            className="rounded-full border border-border bg-secondary px-3 py-1 text-sm font-semibold text-secondary-foreground"
+                          >
                             {label}
                           </span>
                         ))}

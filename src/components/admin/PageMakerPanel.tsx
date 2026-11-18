@@ -3,54 +3,63 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowDown,
   ArrowUp,
+  Crop,
   GripVertical,
   Loader2,
   Monitor,
   Save,
   Smartphone,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { useEffect, useState, type ChangeEvent, type DragEvent } from "react";
 import { toast } from "sonner";
 
+import { ImageEditorDialog } from "@/components/admin/ImageEditorDialog";
 import { HeroSection, PromoSection } from "@/components/shop/home-sections";
 import { AnnouncementBar, FooterContent } from "@/components/shop/SiteChrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { adminSaveSiteContent, adminUploadImage } from "@/lib/admin.functions";
+import { adminDeleteImage, adminSaveSiteContent, adminUploadImage } from "@/lib/admin.functions";
 import { SHOP_KEYS } from "@/lib/admin-queries";
 import { BUNDLED_IMAGE_OPTIONS } from "@/lib/design-images";
+import { optimizeImageFile } from "@/lib/image-optimizer";
 import { SECTION_LABELS, type SectionId, type SiteContent } from "@/lib/site-content";
 
 export function PageMakerPanel({
   siteContent,
   updatedAt,
+  canEdit,
 }: {
   siteContent: SiteContent;
   updatedAt: string | null;
+  canEdit: boolean;
 }) {
   const qc = useQueryClient();
   const saveContent = useServerFn(adminSaveSiteContent);
   const uploadImage = useServerFn(adminUploadImage);
+  const deleteImage = useServerFn(adminDeleteImage);
 
   const [draft, setDraft] = useState<SiteContent>(siteContent);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const [busy, setBusy] = useState(false);
   const [uploadingHero, setUploadingHero] = useState(false);
+  const [editingHero, setEditingHero] = useState(false);
 
   useEffect(() => {
     setDraft(siteContent);
   }, [siteContent]);
 
   function updateField<K extends keyof SiteContent>(key: K, value: SiteContent[K]) {
+    if (!canEdit) return;
     setDraft((prev) => ({ ...prev, [key]: value }));
   }
 
   function reorderSection(from: number, to: number) {
-    if (from === to || from < 0 || to < 0 || to >= draft.sections.length) return;
+    if (!canEdit || from === to || from < 0 || to < 0 || to >= draft.sections.length) return;
     setDraft((prev) => {
       const next = [...prev.sections];
       const [moved] = next.splice(from, 1);
@@ -61,6 +70,7 @@ export function PageMakerPanel({
   }
 
   function toggleSection(id: SectionId) {
+    if (!canEdit) return;
     setDraft((prev) => ({
       ...prev,
       sections: prev.sections.map((s) => (s.id === id ? { ...s, visible: !s.visible } : s)),
@@ -68,23 +78,28 @@ export function PageMakerPanel({
   }
 
   async function handleHeroUpload(e: ChangeEvent<HTMLInputElement>) {
+    if (!canEdit) return;
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingHero(true);
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(String(r.result ?? ""));
-        r.onerror = () => reject(r.error);
-        r.readAsDataURL(file);
-      });
+      const opt = await optimizeImageFile(file, { maxDim: 1600, quality: 0.84 });
       const res = await uploadImage({
-        data: { fileName: file.name, contentType: file.type || "image/jpeg", base64 },
+        data: {
+          fileName: opt.fileName,
+          contentType: opt.contentType,
+          base64: opt.base64,
+          width: opt.width,
+          height: opt.height,
+          originalSizeBytes: opt.originalSizeBytes,
+          optimized: true,
+          description: "Storefront Hero Banner",
+        },
       });
       if (!res.ok) toast.error(res.message);
       else {
         updateField("heroImage", res.key);
-        toast.success("Hero banner image uploaded.");
+        toast.success("Hero banner image optimized and uploaded.");
       }
     } catch {
       toast.error("Could not upload hero image.");
@@ -94,12 +109,24 @@ export function PageMakerPanel({
     }
   }
 
+  async function removeUploadedHero() {
+    if (!canEdit) return;
+    const current = draft.heroImage;
+    updateField("heroImage", null);
+    if (current && current.startsWith("upload:")) {
+      await deleteImage({ data: { key: current } }).catch(() => {});
+      await qc.invalidateQueries({ queryKey: ["admin", "media"] });
+      toast.success("Removed hero image from storage.");
+    }
+  }
+
   async function handlePublish() {
+    if (!canEdit) return;
     setBusy(true);
     try {
       const res = await saveContent({ data: draft });
       if (!res.ok) {
-        toast.error("Could not publish website changes.");
+        toast.error(res.message || "Could not publish website changes.");
         return;
       }
       await Promise.all([
@@ -127,25 +154,27 @@ export function PageMakerPanel({
                 Reorder or show/hide sections on the main website.
               </p>
             </div>
-            <Button variant="cta" size="sm" disabled={busy} onClick={handlePublish}>
-              {busy ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Save className="h-3.5 w-3.5" />
-              )}
-              Publish
-            </Button>
+            {canEdit && (
+              <Button variant="cta" size="sm" disabled={busy} onClick={handlePublish}>
+                {busy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+                Publish
+              </Button>
+            )}
           </div>
 
           <ul className="mt-4 space-y-2">
             {draft.sections.map((s, idx) => (
               <li
                 key={s.id}
-                draggable
-                onDragStart={() => setDragIdx(idx)}
+                draggable={canEdit}
+                onDragStart={() => canEdit && setDragIdx(idx)}
                 onDragOver={(e: DragEvent) => e.preventDefault()}
                 onDrop={() => {
-                  if (dragIdx !== null) reorderSection(dragIdx, idx);
+                  if (canEdit && dragIdx !== null) reorderSection(dragIdx, idx);
                   setDragIdx(null);
                 }}
                 className={`flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2.5 transition-colors ${
@@ -153,34 +182,41 @@ export function PageMakerPanel({
                 }`}
               >
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
+                  {canEdit && (
+                    <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
+                  )}
                   <span className="truncate text-sm font-semibold">{SECTION_LABELS[s.id]}</span>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    disabled={idx === 0}
-                    onClick={() => reorderSection(idx, idx - 1)}
-                    aria-label={`Move ${SECTION_LABELS[s.id]} up`}
-                  >
-                    <ArrowUp className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    disabled={idx === draft.sections.length - 1}
-                    onClick={() => reorderSection(idx, idx + 1)}
-                    aria-label={`Move ${SECTION_LABELS[s.id]} down`}
-                  >
-                    <ArrowDown className="h-3.5 w-3.5" />
-                  </Button>
+                  {canEdit && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        disabled={idx === 0}
+                        onClick={() => reorderSection(idx, idx - 1)}
+                        aria-label={`Move ${SECTION_LABELS[s.id]} up`}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        disabled={idx === draft.sections.length - 1}
+                        onClick={() => reorderSection(idx, idx + 1)}
+                        aria-label={`Move ${SECTION_LABELS[s.id]} down`}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
                   <button
                     type="button"
+                    disabled={!canEdit}
                     onClick={() => toggleSection(s.id)}
                     className={`ml-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
                       s.visible
@@ -209,6 +245,7 @@ export function PageMakerPanel({
             <Label htmlFor="pm-announcement">Top Announcement Bar</Label>
             <Input
               id="pm-announcement"
+              disabled={!canEdit}
               value={draft.announcement}
               onChange={(e) => updateField("announcement", e.target.value)}
             />
@@ -219,6 +256,7 @@ export function PageMakerPanel({
               <Label htmlFor="pm-hero-title">Hero Title</Label>
               <Input
                 id="pm-hero-title"
+                disabled={!canEdit}
                 value={draft.heroTitle}
                 onChange={(e) => updateField("heroTitle", e.target.value)}
               />
@@ -227,6 +265,7 @@ export function PageMakerPanel({
               <Label htmlFor="pm-hero-hi">Highlighted Words</Label>
               <Input
                 id="pm-hero-hi"
+                disabled={!canEdit}
                 value={draft.heroHighlight}
                 onChange={(e) => updateField("heroHighlight", e.target.value)}
               />
@@ -238,6 +277,7 @@ export function PageMakerPanel({
             <Textarea
               id="pm-hero-sub"
               rows={2}
+              disabled={!canEdit}
               value={draft.heroSubtitle}
               onChange={(e) => updateField("heroSubtitle", e.target.value)}
             />
@@ -248,6 +288,7 @@ export function PageMakerPanel({
               <Label htmlFor="pm-hero-btn">Hero Button</Label>
               <Input
                 id="pm-hero-btn"
+                disabled={!canEdit}
                 value={draft.heroButton}
                 onChange={(e) => updateField("heroButton", e.target.value)}
               />
@@ -256,6 +297,7 @@ export function PageMakerPanel({
               <Label htmlFor="pm-phone">Contact Phone</Label>
               <Input
                 id="pm-phone"
+                disabled={!canEdit}
                 value={draft.phone}
                 onChange={(e) => updateField("phone", e.target.value)}
               />
@@ -263,56 +305,73 @@ export function PageMakerPanel({
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <Label>Hero Image</Label>
-              <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-primary hover:underline">
-                {uploadingHero ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Upload className="h-3.5 w-3.5" />
-                )}
-                Upload picture
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleHeroUpload}
-                  disabled={uploadingHero}
-                />
-              </label>
+              {canEdit && (
+                <div className="flex items-center gap-3">
+                  {draft.heroImage && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingHero(true)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                    >
+                      <Crop className="h-3.5 w-3.5" /> Edit image
+                    </button>
+                  )}
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-primary hover:underline">
+                    {uploadingHero ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    Upload &amp; Optimize
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleHeroUpload}
+                      disabled={uploadingHero}
+                    />
+                  </label>
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <Input
+                disabled={!canEdit}
                 value={draft.heroImage ?? ""}
                 onChange={(e) => updateField("heroImage", e.target.value || null)}
                 placeholder="Default blueprint or https:// / key"
                 className="text-xs"
               />
-              {draft.heroImage && (
+              {canEdit && draft.heroImage && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => updateField("heroImage", null)}
+                  onClick={removeUploadedHero}
+                  title="Reset hero image (deletes uploaded file)"
                 >
-                  Reset
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               )}
             </div>
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
-              {BUNDLED_IMAGE_OPTIONS.slice(0, 6).map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => updateField("heroImage", opt.key)}
-                  className={`shrink-0 overflow-hidden rounded-lg border-2 ${
-                    draft.heroImage === opt.key ? "border-primary" : "border-transparent"
-                  }`}
-                >
-                  <img src={opt.src} alt={opt.label} className="h-9 w-12 object-cover" />
-                </button>
-              ))}
-            </div>
+            {canEdit && (
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {BUNDLED_IMAGE_OPTIONS.slice(0, 6).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => updateField("heroImage", opt.key)}
+                    className={`shrink-0 overflow-hidden rounded-lg border-2 ${
+                      draft.heroImage === opt.key ? "border-primary" : "border-transparent"
+                    }`}
+                  >
+                    <img src={opt.src} alt={opt.label} className="h-9 w-12 object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -320,6 +379,7 @@ export function PageMakerPanel({
               <Label htmlFor="pm-shop-head">Categories Heading</Label>
               <Input
                 id="pm-shop-head"
+                disabled={!canEdit}
                 value={draft.shopHeading}
                 onChange={(e) => updateField("shopHeading", e.target.value)}
               />
@@ -328,6 +388,7 @@ export function PageMakerPanel({
               <Label htmlFor="pm-des-head">Designs Heading</Label>
               <Input
                 id="pm-des-head"
+                disabled={!canEdit}
                 value={draft.designsHeading}
                 onChange={(e) => updateField("designsHeading", e.target.value)}
               />
@@ -338,6 +399,7 @@ export function PageMakerPanel({
             <Label htmlFor="pm-promo-title">Promo Banner Title</Label>
             <Input
               id="pm-promo-title"
+              disabled={!canEdit}
               value={draft.promoTitle}
               onChange={(e) => updateField("promoTitle", e.target.value)}
             />
@@ -346,6 +408,7 @@ export function PageMakerPanel({
             <Label htmlFor="pm-promo-text">Promo Banner Subtitle</Label>
             <Input
               id="pm-promo-text"
+              disabled={!canEdit}
               value={draft.promoText}
               onChange={(e) => updateField("promoText", e.target.value)}
             />
@@ -355,6 +418,7 @@ export function PageMakerPanel({
               <Label htmlFor="pm-foot-head">Footer Heading</Label>
               <Input
                 id="pm-foot-head"
+                disabled={!canEdit}
                 value={draft.footerHeading}
                 onChange={(e) => updateField("footerHeading", e.target.value)}
               />
@@ -363,23 +427,26 @@ export function PageMakerPanel({
               <Label htmlFor="pm-foot-note">Copyright Note</Label>
               <Input
                 id="pm-foot-note"
+                disabled={!canEdit}
                 value={draft.footerNote}
                 onChange={(e) => updateField("footerNote", e.target.value)}
               />
             </div>
           </div>
 
-          <Button
-            type="button"
-            variant="cta"
-            size="lg"
-            className="w-full"
-            disabled={busy}
-            onClick={handlePublish}
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Publish Website Changes
-          </Button>
+          {canEdit && (
+            <Button
+              type="button"
+              variant="cta"
+              size="lg"
+              className="w-full"
+              disabled={busy}
+              onClick={handlePublish}
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Publish Website Changes
+            </Button>
+          )}
         </section>
       </div>
 
@@ -430,7 +497,8 @@ export function PageMakerPanel({
                       <div key="categories" className="rounded-xl border border-border bg-card p-4">
                         <h3 className="text-lg font-bold">{draft.shopHeading}</h3>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Active category pills render here dynamically.
+                          Active category cards render here dynamically (only categories with active
+                          designs).
                         </p>
                       </div>
                     );
@@ -454,6 +522,24 @@ export function PageMakerPanel({
           </div>
         </div>
       </section>
+
+      <ImageEditorDialog
+        target={
+          editingHero && draft.heroImage
+            ? {
+                imageKey: draft.heroImage,
+                label: "Hero Banner",
+                description: "Storefront Hero Banner",
+              }
+            : null
+        }
+        replaceStorageFile
+        onClose={() => setEditingHero(false)}
+        onSaved={(newKey) => {
+          updateField("heroImage", newKey);
+          setEditingHero(false);
+        }}
+      />
     </div>
   );
 }

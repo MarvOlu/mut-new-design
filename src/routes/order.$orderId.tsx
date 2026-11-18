@@ -16,9 +16,15 @@ export const Route = createFileRoute("/order/$orderId")({
   head: () => ({
     meta: [
       { title: "Your order — Mutken Architectural Designs" },
-      { name: "description", content: "Track your M-PESA payment and download your purchased designs." },
+      {
+        name: "description",
+        content: "Track your M-PESA payment and download your purchased designs.",
+      },
       { property: "og:title", content: "Your order — Mutken Architectural Designs" },
-      { property: "og:description", content: "Track your M-PESA payment and download your designs." },
+      {
+        property: "og:description",
+        content: "Track your M-PESA payment and download your designs.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex" },
@@ -49,9 +55,18 @@ function OrderPage() {
         </Button>
       </SiteHeader>
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-        {isLoading && <StatusCard icon={<Loader2 className="h-8 w-8 animate-spin" />} title="Loading your order…" />}
+        {isLoading && (
+          <StatusCard
+            icon={<Loader2 className="h-8 w-8 animate-spin" />}
+            title="Loading your order…"
+          />
+        )}
         {(isError || (data && !data.found)) && (
-          <StatusCard icon={<XCircle className="h-8 w-8 text-destructive" />} title="Order not found" text="Check the link, or start a new order." />
+          <StatusCard
+            icon={<XCircle className="h-8 w-8 text-destructive" />}
+            title="Order not found"
+            text="Check the link, or start a new order."
+          />
         )}
         {data?.found && data.status === "pending" && (
           <StatusCard
@@ -67,12 +82,18 @@ function OrderPage() {
             text={`Enter your M-PESA PIN to pay ${formatKsh(data.amount)}. This page updates automatically once the payment goes through.`}
           >
             {Date.now() - startedAt > MAX_WAIT_MS && (
-              <p className="text-sm text-muted-foreground">Still waiting? Refresh this page, or go back and try again.</p>
+              <p className="text-sm text-muted-foreground">
+                Still waiting? Refresh this page, or go back and try again.
+              </p>
             )}
           </StatusCard>
         )}
         {data?.found && data.status === "failed" && (
-          <StatusCard icon={<XCircle className="h-8 w-8 text-destructive" />} title="Payment not completed" text={data.message ?? "The M-PESA payment was cancelled or failed."}>
+          <StatusCard
+            icon={<XCircle className="h-8 w-8 text-destructive" />}
+            title="Payment not completed"
+            text={data.message ?? "The M-PESA payment was cancelled or failed."}
+          >
             <Button asChild variant="cta" size="lg">
               <Link to="/">Try again</Link>
             </Button>
@@ -98,7 +119,17 @@ function OrderPage() {
   );
 }
 
-function StatusCard({ icon, title, text, children }: { icon: React.ReactNode; title: string; text?: string; children?: React.ReactNode }) {
+function StatusCard({
+  icon,
+  title,
+  text,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  text?: string;
+  children?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col items-center gap-4 rounded-[2rem] border border-border bg-card p-10 text-center shadow-card">
       {icon}
@@ -114,7 +145,13 @@ function DesignDownloads({
   item,
 }: {
   orderId: string;
-  item: { id: string; name: string; category: string; image_key: string; formats: DownloadFormat[] };
+  item: {
+    id: string;
+    name: string;
+    category: string;
+    image_key: string;
+    formats: DownloadFormat[];
+  };
 }) {
   const getLink = useServerFn(getDownloadLink);
   const [busy, setBusy] = useState<DownloadFormat | null>(null);
@@ -138,10 +175,19 @@ function DesignDownloads({
 
   return (
     <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-5 shadow-card sm:flex-row sm:items-center">
-      <img src={designImage(item.image_key)} alt="" className="h-24 w-full rounded-2xl object-cover sm:w-32" loading="lazy" width={128} height={96} />
+      <img
+        src={designImage(item.image_key)}
+        alt=""
+        className="h-24 w-full rounded-2xl object-cover sm:w-32"
+        loading="lazy"
+        width={128}
+        height={96}
+      />
       <div className="flex-1 space-y-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{item.category}</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {item.category}
+          </p>
           <h2 className="text-lg font-bold">{item.name}</h2>
         </div>
         {item.formats.length === 0 ? (
@@ -151,7 +197,15 @@ function DesignDownloads({
         ) : (
           <div className="flex flex-wrap gap-2">
             {item.formats.map((f) => (
-              <Button key={f} variant={f === "pdf" ? "cta" : "soft"} size="sm" className="h-9 px-4" disabled={busy !== null} onClick={() => download(f)} title={DOWNLOAD_FORMATS[f].description}>
+              <Button
+                key={f}
+                variant={f === "pdf" ? "cta" : "soft"}
+                size="sm"
+                className="h-9 px-4"
+                disabled={busy !== null}
+                onClick={() => download(f)}
+                title={DOWNLOAD_FORMATS[f].description}
+              >
                 {busy === f ? <Loader2 className="animate-spin" /> : <Download />}
                 {DOWNLOAD_FORMATS[f].label}
               </Button>

@@ -2,15 +2,22 @@ import { queryOptions } from "@tanstack/react-query";
 
 import type { Json } from "@/integrations/supabase/types";
 import {
+  adminGetAccessControl,
   adminGetDashboardSnapshot,
   adminGetOrderDetail,
   adminGetSiteContent,
   adminListCategories,
   adminListDesignFiles,
   adminListDesigns,
+  adminListMedia,
+  type RoleMember,
+  type StoredImageMeta,
+  type UserRole,
 } from "./admin.functions";
 import type { DownloadFormat } from "./downloads";
 import type { OrderStage } from "./order-stages";
+
+export type { RoleMember, StoredImageMeta, UserRole };
 
 export type OrderFilter = OrderStage | "all" | "successful";
 
@@ -101,6 +108,16 @@ export const adminCategoriesQuery = queryOptions({
 export const adminSiteContentQuery = queryOptions({
   queryKey: ["admin", "site"],
   queryFn: () => adminGetSiteContent(),
+});
+
+export const mediaLibraryQuery = queryOptions({
+  queryKey: ["admin", "media"],
+  queryFn: () => adminListMedia(),
+});
+
+export const accessControlQuery = queryOptions({
+  queryKey: ["admin", "access"],
+  queryFn: () => adminGetAccessControl(),
 });
 
 /** Short order reference shown to the owner, matching the M-PESA account reference. */

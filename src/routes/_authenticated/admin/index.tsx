@@ -10,20 +10,23 @@ import {
   LayoutTemplate,
   LogOut,
   Package,
+  ShieldCheck,
   ShoppingBag,
   XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { AccessPanel } from "@/components/admin/AccessPanel";
 import { CategoriesPanel } from "@/components/admin/CategoriesPanel";
 import { DesignsPanel } from "@/components/admin/DesignsPanel";
 import { OrdersPanel } from "@/components/admin/OrdersPanel";
 import { PageMakerPanel } from "@/components/admin/PageMakerPanel";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { supabase } from "@/integrations/supabase/client";
+import { isSupabaseConfigured, signOutLocalOwner, supabase } from "@/integrations/supabase/client";
 import {
+  accessControlQuery,
   adminCategoriesQuery,
   adminDesignsQuery,
   adminSiteContentQuery,
@@ -37,32 +40,35 @@ import {
 import { STAGE_META, STAGE_ORDER, type OrderStage } from "@/lib/order-stages";
 import { DEFAULT_SITE_CONTENT } from "@/lib/site-content";
 
-export const Route = createFileRoute("/_authenticated/admin")({
+export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
     meta: [
       { title: "Dashboard — Mutken Architectural Designs" },
-      { name: "description", content: "Owner dashboard for the Mutken design shop." },
+      {
+        name: "description",
+        content: "Backend management dashboard for Mutken Architectural Designs.",
+      },
       { property: "og:title", content: "Dashboard — Mutken" },
-      { property: "og:description", content: "Owner dashboard for the Mutken design shop." },
+      {
+        property: "og:description",
+        content: "Backend management dashboard for Mutken Architectural Designs.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex" },
     ],
   }),
-  beforeLoad: async ({ context }) => {
-    const { data } = await supabase.rpc("has_role", { _user_id: context.user.id, _role: "admin" });
-    return { isAdmin: !!data };
-  },
-  component: AdminPage,
+  component: AdminDashboardIndexPage,
 });
 
-type TabId = "orders" | "designs" | "categories" | "pagemaker";
+type TabId = "orders" | "designs" | "categories" | "pagemaker" | "access";
 
 const NAV_TABS: { id: TabId; label: string; icon: typeof ShoppingBag }[] = [
   { id: "orders", label: "Orders", icon: ShoppingBag },
   { id: "designs", label: "Designs", icon: Package },
   { id: "categories", label: "Categories", icon: FolderKanban },
   { id: "pagemaker", label: "Page Maker", icon: LayoutTemplate },
+  { id: "access", label: "Access", icon: ShieldCheck },
 ];
 
 const STAGE_ICONS: Record<OrderStage, typeof Clock> = {
@@ -72,32 +78,22 @@ const STAGE_ICONS: Record<OrderStage, typeof Clock> = {
   completed: CheckCircle2,
 };
 
-function AdminPage() {
-  const { isAdmin, user } = Route.useRouteContext();
+function AdminDashboardIndexPage() {
+  const { user } = Route.useRouteContext();
   const navigate = useNavigate();
 
   async function signOut() {
-    await supabase.auth.signOut();
+    signOutLocalOwner();
+    if (isSupabaseConfigured()) {
+      await supabase.auth.signOut().catch(() => {});
+    }
     navigate({ to: "/auth", replace: true });
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="grid min-h-screen place-items-center px-4 text-center">
-        <div className="max-w-sm space-y-4">
-          <h1 className="text-2xl font-extrabold">No dashboard access</h1>
-          <p className="text-muted-foreground">{user.email} isn't the shop owner's account.</p>
-          <Button variant="cta" onClick={signOut}>
-            Sign out
-          </Button>
-        </div>
-      </div>
-    );
-  }
-  return <Dashboard onSignOut={signOut} />;
+  return <Dashboard userEmail={user.email ?? null} onSignOut={signOut} />;
 }
 
-function Dashboard({ onSignOut }: { onSignOut: () => void }) {
+function Dashboard({ userEmail, onSignOut }: { userEmail: string | null; onSignOut: () => void }) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<TabId>("orders");
   const [orderFilter, setOrderFilter] = useState<OrderFilter>("all");
@@ -123,6 +119,10 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const designsQ = useQuery(adminDesignsQuery);
   const categoriesQ = useQuery(adminCategoriesQuery);
   const siteQ = useQuery(adminSiteContentQuery);
+  const accessQ = useQuery(accessControlQuery);
+
+  const myRole = snapshot.data?.role ?? accessQ.data?.myRole ?? "user";
+  const canEdit = myRole === "admin";
 
   // Real-time SSE connection for live order notifications and active shopper/admin sessions
   useEffect(() => {
@@ -157,7 +157,9 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 
     es.addEventListener("sessions:update", (e) => {
       try {
-        const data = JSON.parse((e as MessageEvent).data) as { payload?: { sessions?: ActiveSession[] } };
+        const data = JSON.parse((e as MessageEvent).data) as {
+          payload?: { sessions?: ActiveSession[] };
+        };
         if (data.payload?.sessions) setLiveSessions(data.payload.sessions);
       } catch {
         // Ignore
@@ -172,7 +174,9 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
         };
         const evt = parsed.payload?.event;
         if (evt) {
-          setLiveNotifications((prev) => [evt, ...prev.filter((x) => x.id !== evt.id)].slice(0, 30));
+          setLiveNotifications((prev) =>
+            [evt, ...prev.filter((x) => x.id !== evt.id)].slice(0, 30),
+          );
           setUnreadCount((c) => c + 1);
           toast.info(`${evt.message} · ${orderRef(evt.order_id)}`, {
             action: {
@@ -208,8 +212,10 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   }, [qc]);
 
   const counts = snapshot.data?.counts;
-  const activeSessions = liveSessions.length > 0 ? liveSessions : (snapshot.data?.activeSessions ?? []);
-  const notifications = liveNotifications.length > 0 ? liveNotifications : (snapshot.data?.recentEvents ?? []);
+  const activeSessions =
+    liveSessions.length > 0 ? liveSessions : (snapshot.data?.activeSessions ?? []);
+  const notifications =
+    liveNotifications.length > 0 ? liveNotifications : (snapshot.data?.recentEvents ?? []);
 
   function clickStageCard(stage: OrderStage) {
     setTab("orders");
@@ -221,7 +227,10 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
       {/* Single-row 3-zone top bar */}
       <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
-          <Link to="/" className="flex shrink-0 items-center gap-2.5 font-display text-base font-extrabold text-primary whitespace-nowrap">
+          <Link
+            to="/"
+            className="flex shrink-0 items-center gap-2.5 font-display text-base font-extrabold text-primary whitespace-nowrap"
+          >
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-sm font-extrabold text-primary-foreground">
               M
             </span>
@@ -264,7 +273,12 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
                 </span>
               )}
             </Button>
-            <Button asChild variant="soft" size="sm" className="hidden whitespace-nowrap sm:inline-flex">
+            <Button
+              asChild
+              variant="soft"
+              size="sm"
+              className="hidden whitespace-nowrap sm:inline-flex"
+            >
               <Link to="/">
                 View shop <ExternalLink className="h-3.5 w-3.5" />
               </Link>
@@ -300,6 +314,35 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
       </header>
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+        {!snapshot.isLoading && !canEdit && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+            <span>
+              Signed in as <strong>{userEmail ?? "User"}</strong> with <strong>User</strong>{" "}
+              (read-only) role. Only authenticated Admins can upload/edit/delete images, prices, or
+              website content.
+            </span>
+            <button
+              type="button"
+              onClick={() => setTab("access")}
+              className="font-semibold underline hover:no-underline"
+            >
+              View Access Roles
+            </button>
+          </div>
+        )}
+
+        {snapshot.isError && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <span>
+              Could not load dashboard data:{" "}
+              {snapshot.error instanceof Error ? snapshot.error.message : "Unknown error"}
+            </span>
+            <Button type="button" variant="outline" size="sm" onClick={() => snapshot.refetch()}>
+              Retry
+            </Button>
+          </div>
+        )}
+
         {/* Top of screen opens on four card counts: Received, Processing, Rejected, Completed */}
         <section aria-label="Order stage counts" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {STAGE_ORDER.map((stage) => {
@@ -348,6 +391,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
             selectedOrderId={selectedOrderId}
             onSelectOrder={setSelectedOrderId}
             sseConnected={sseConnected}
+            canEdit={canEdit}
           />
         )}
 
@@ -356,6 +400,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
             designs={designsQ.data ?? []}
             categories={categoriesQ.data ?? []}
             isLoading={designsQ.isLoading}
+            canEdit={canEdit}
           />
         )}
 
@@ -363,6 +408,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
           <CategoriesPanel
             categories={categoriesQ.data ?? []}
             isLoading={categoriesQ.isLoading}
+            canEdit={canEdit}
           />
         )}
 
@@ -370,6 +416,16 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
           <PageMakerPanel
             siteContent={siteQ.data?.content ?? DEFAULT_SITE_CONTENT}
             updatedAt={siteQ.data?.updatedAt ?? null}
+            canEdit={canEdit}
+          />
+        )}
+
+        {tab === "access" && (
+          <AccessPanel
+            myRole={myRole}
+            myEmail={accessQ.data?.myEmail ?? userEmail}
+            members={accessQ.data?.members ?? []}
+            isLoading={accessQ.isLoading}
           />
         )}
       </main>

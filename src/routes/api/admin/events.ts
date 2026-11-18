@@ -23,7 +23,9 @@ export const Route = createFileRoute("/api/admin/events")({
           start(controller) {
             const send = (event: string, data: unknown) => {
               try {
-                controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+                controller.enqueue(
+                  encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+                );
               } catch {
                 // Stream closed
               }

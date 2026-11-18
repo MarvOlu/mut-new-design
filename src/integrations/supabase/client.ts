@@ -3,8 +3,16 @@ import type { Database } from "./types";
 import { brokeredPreviewStorage } from "./previewAuthStorage";
 
 const LOCAL_SESSION_KEY = "mutken_local_owner_session";
-export const LOCAL_OWNER_EMAIL = "oluoch540@gmail.com";
+const LOCAL_SIGNED_OUT_KEY = "mutken_local_owner_signed_out";
+export const OWNER_EMAILS = ["oluoch542@gmail.com", "oluoch540@gmail.com"] as const;
+export const LOCAL_OWNER_EMAIL = "oluoch542@gmail.com";
 export const LOCAL_OWNER_TOKEN = "local-owner-session-token";
+
+export function isOwnerEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  return (OWNER_EMAILS as readonly string[]).includes(normalized);
+}
 
 export function isSupabaseConfigured(): boolean {
   const url =
@@ -62,32 +70,69 @@ function createSupabaseFetch(supabaseUrl: string, supabaseKey: string): typeof f
   };
 }
 
+type LocalOwnerSession = { access_token: string; user: { id: string; email: string } };
 type AuthListener = (event: string, session: unknown) => void;
 const localListeners = new Set<AuthListener>();
+let memoryLocalSession: LocalOwnerSession | null = null;
+let memorySignedOut = false;
 
-function readLocalSession() {
-  if (typeof window === "undefined") return null;
+function readSignedOutFlag(): boolean {
+  if (memorySignedOut) return true;
+  if (typeof window === "undefined") return false;
   try {
-    const raw = window.localStorage.getItem(LOCAL_SESSION_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as { access_token: string; user: { id: string; email: string } };
+    return window.sessionStorage.getItem(LOCAL_SIGNED_OUT_KEY) === "1";
   } catch {
-    return null;
+    return false;
   }
 }
 
-function writeLocalSession(
-  session: { access_token: string; user: { id: string; email: string } } | null,
-) {
+function writeSignedOutFlag(value: boolean) {
+  memorySignedOut = value;
   if (typeof window === "undefined") return;
   try {
-    if (session) {
-      window.localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(session));
+    if (value) {
+      window.sessionStorage.setItem(LOCAL_SIGNED_OUT_KEY, "1");
     } else {
-      window.localStorage.removeItem(LOCAL_SESSION_KEY);
+      window.sessionStorage.removeItem(LOCAL_SIGNED_OUT_KEY);
     }
   } catch {
-    // Ignore storage quota errors
+    // Ignore restricted storage in sandboxed iframes
+  }
+}
+
+function readLocalSession(): LocalOwnerSession | null {
+  if (memoryLocalSession) return memoryLocalSession;
+  if (typeof window === "undefined") return null;
+  for (const storage of [window.sessionStorage, window.localStorage]) {
+    try {
+      const raw = storage.getItem(LOCAL_SESSION_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as LocalOwnerSession;
+        if (parsed?.access_token && parsed?.user?.id) {
+          memoryLocalSession = parsed;
+          return parsed;
+        }
+      }
+    } catch {
+      // Storage may be blocked in third-party iframe contexts
+    }
+  }
+  return null;
+}
+
+function writeLocalSession(session: LocalOwnerSession | null) {
+  memoryLocalSession = session;
+  if (typeof window === "undefined") return;
+  for (const storage of [window.sessionStorage, window.localStorage]) {
+    try {
+      if (session) {
+        storage.setItem(LOCAL_SESSION_KEY, JSON.stringify(session));
+      } else {
+        storage.removeItem(LOCAL_SESSION_KEY);
+      }
+    } catch {
+      // Ignore storage quota or third-party iframe restrictions
+    }
   }
 }
 
@@ -101,14 +146,43 @@ function notifyLocalAuth(event: string, session: unknown) {
   }
 }
 
-export function signInLocalOwner(email = LOCAL_OWNER_EMAIL) {
-  const session = {
+export function signInLocalOwner(email = LOCAL_OWNER_EMAIL): LocalOwnerSession {
+  writeSignedOutFlag(false);
+  const session: LocalOwnerSession = {
     access_token: LOCAL_OWNER_TOKEN,
     user: { id: "local-owner-1", email: email.trim() || LOCAL_OWNER_EMAIL },
   };
   writeLocalSession(session);
   notifyLocalAuth("SIGNED_IN", session);
   return session;
+}
+
+export function signOutLocalOwner() {
+  writeSignedOutFlag(true);
+  writeLocalSession(null);
+  notifyLocalAuth("SIGNED_OUT", null);
+}
+
+let serverModeCache: "local" | "supabase" | null = null;
+
+export function setServerBackendMode(mode: "local" | "supabase") {
+  serverModeCache = mode;
+}
+
+export function getServerBackendMode(): "local" | "supabase" | null {
+  return serverModeCache;
+}
+
+export function getLocalOwnerSession(): LocalOwnerSession | null {
+  return readLocalSession();
+}
+
+export function ensureLocalOwnerSession(forceLocal = false): LocalOwnerSession | null {
+  if (!forceLocal && isSupabaseConfigured() && serverModeCache !== "local") return null;
+  const existing = readLocalSession();
+  if (existing) return existing;
+  if (readSignedOutFlag()) return null;
+  return signInLocalOwner(LOCAL_OWNER_EMAIL);
 }
 
 function createLocalFallbackClient() {
@@ -183,6 +257,7 @@ function createLocalFallbackClient() {
         return { data: { user: session.user, session }, error: null };
       },
       async signOut() {
+        writeSignedOutFlag(true);
         writeLocalSession(null);
         notifyLocalAuth("SIGNED_OUT", null);
         return { error: null };
@@ -202,6 +277,49 @@ function createLocalFallbackClient() {
       }),
     },
   } as unknown as ReturnType<typeof createClient<Database>>;
+}
+
+function safeAuthStorage() {
+  const base = brokeredPreviewStorage();
+  if (!base) return undefined;
+  const mem = new Map<string, string>();
+  return {
+    getItem: async (key: string) => {
+      try {
+        return await base.getItem(key);
+      } catch {
+        try {
+          return window.sessionStorage.getItem(key);
+        } catch {
+          return mem.get(key) ?? null;
+        }
+      }
+    },
+    setItem: async (key: string, value: string) => {
+      mem.set(key, value);
+      try {
+        await base.setItem(key, value);
+      } catch {
+        try {
+          window.sessionStorage.setItem(key, value);
+        } catch {
+          // Stored in memory
+        }
+      }
+    },
+    removeItem: async (key: string) => {
+      mem.delete(key);
+      try {
+        await base.removeItem(key);
+      } catch {
+        try {
+          window.sessionStorage.removeItem(key);
+        } catch {
+          // Ignore
+        }
+      }
+    },
+  };
 }
 
 function createSupabaseClient() {
@@ -224,7 +342,7 @@ function createSupabaseClient() {
       fetch: createSupabaseFetch(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY),
     },
     auth: {
-      storage: brokeredPreviewStorage(),
+      storage: safeAuthStorage(),
       persistSession: true,
       autoRefreshToken: true,
     },

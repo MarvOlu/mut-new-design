@@ -25,7 +25,9 @@ export async function syncPendingOrder(
 ): Promise<{ status: "paid" | "failed"; resultDesc: string } | null> {
   if (order.status !== "pending" || !order.checkout_request_id) return null;
   const ageMs = Date.now() - new Date(order.created_at).getTime();
-  const sinceQueryMs = order.last_query_at ? Date.now() - new Date(order.last_query_at).getTime() : Infinity;
+  const sinceQueryMs = order.last_query_at
+    ? Date.now() - new Date(order.last_query_at).getTime()
+    : Infinity;
   if (ageMs < minAgeMs || sinceQueryMs < minGapMs) return null;
 
   await db.from("orders").update({ last_query_at: new Date().toISOString() }).eq("id", order.id);

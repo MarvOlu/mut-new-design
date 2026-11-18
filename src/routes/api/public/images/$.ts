@@ -20,7 +20,8 @@ export const Route = createFileRoute("/api/public/images/$")({
           return new Response("Not found", { status: 404 });
         }
 
-        const { isSupabaseAdminConfigured, supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { isSupabaseAdminConfigured, supabaseAdmin } =
+          await import("@/integrations/supabase/client.server");
         if (!isSupabaseAdminConfigured()) {
           const { readUploadedImage } = await import("@/lib/local-store.server");
           const bytes = readUploadedImage(path);

@@ -22,3 +22,10 @@ describe("Design page routing", () => {
     expect(router.matchRoutes("/designs/roller-castle").at(-1)?.routeId).toBe("/designs/$designId");
   });
 });
+
+describe("Dashboard routing", () => {
+  it("matches /admin to its own separate dashboard index route", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+    expect(router.matchRoutes("/admin").at(-1)?.routeId).toBe("/_authenticated/admin/");
+  });
+});

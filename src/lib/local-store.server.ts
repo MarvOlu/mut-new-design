@@ -63,9 +63,42 @@ export interface ActiveSession {
 }
 
 export interface AdminRealtimeEvent {
-  type: "order:created" | "order:prompt_sent" | "order:paid" | "order:failed" | "order:download" | "sessions:update" | "catalog:update";
+  type:
+    | "order:created"
+    | "order:prompt_sent"
+    | "order:paid"
+    | "order:failed"
+    | "order:download"
+    | "sessions:update"
+    | "catalog:update";
   timestamp: string;
   payload: Record<string, unknown>;
+}
+
+export type UserRole = "admin" | "user";
+
+export interface RoleMember {
+  email: string;
+  role: UserRole;
+  addedBy: string | null;
+  updatedAt: string;
+}
+
+export interface StoredImageMeta {
+  key: string;
+  storagePath: string;
+  fileName: string;
+  contentType: string;
+  width: number | null;
+  height: number | null;
+  sizeBytes: number;
+  originalSizeBytes: number | null;
+  optimized: boolean;
+  watermarkText: string | null;
+  description: string | null;
+  designId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface PersistedState {
@@ -75,6 +108,8 @@ interface PersistedState {
   order_events: StoredOrderEvent[];
   site_content: SiteContent;
   site_updated_at: string;
+  image_metadata: Record<string, StoredImageMeta>;
+  role_members: RoleMember[];
 }
 
 const STORE_FILE = "/tmp/mutken-shop-store.json";
@@ -110,7 +145,8 @@ function createInitialState(): PersistedState {
       image_key: "residential",
       images: ["residential", "residential-interior", "floorplan"],
       image_captions: {
-        residential: "Front exterior perspective showing balcony glazing and timber louver accents.",
+        residential:
+          "Front exterior perspective showing balcony glazing and timber louver accents.",
         "residential-interior": "Open-plan living and dining space with natural daylighting.",
         floorplan: "Dimensioned 2-bedroom floor plan with master ensuite and utility balcony.",
       },
@@ -173,7 +209,8 @@ function createInitialState(): PersistedState {
         industrial: "Structural steel portal frame housing for turbine equipment.",
         "industrial-detail": "Baseplate, crane rail, and acoustic cladding section details.",
       },
-      description: "Structural layout and elevation drawings for a turbine housing, prepared for engineers and contractors.",
+      description:
+        "Structural layout and elevation drawings for a turbine housing, prepared for engineers and contractors.",
       is_active: true,
       sort_order: 4,
       created_at: iso(-86_400_000 * 11),
@@ -188,7 +225,8 @@ function createInitialState(): PersistedState {
       image_key: "industrial",
       images: ["industrial", "industrial-detail", "elevation"],
       image_captions: {},
-      description: "A pedestrian and light vehicle bridge with steel and concrete details, spans and sections ready for costing.",
+      description:
+        "A pedestrian and light vehicle bridge with steel and concrete details, spans and sections ready for costing.",
       is_active: true,
       sort_order: 5,
       created_at: iso(-86_400_000 * 10),
@@ -203,7 +241,8 @@ function createInitialState(): PersistedState {
       image_key: "urban",
       images: ["urban", "urban-aerial", "floorplan"],
       image_captions: {},
-      description: "A first floor layout for a mixed-use urban building, with shops below and apartments or offices above.",
+      description:
+        "A first floor layout for a mixed-use urban building, with shops below and apartments or offices above.",
       is_active: true,
       sort_order: 6,
       created_at: iso(-86_400_000 * 9),
@@ -218,7 +257,8 @@ function createInitialState(): PersistedState {
       image_key: "urban",
       images: ["urban", "urban-aerial", "elevation"],
       image_captions: {},
-      description: "A grand entrance gate with bronze finishes, pillars and a guard house, designed to give any compound a premium first impression.",
+      description:
+        "A grand entrance gate with bronze finishes, pillars and a guard house, designed to give any compound a premium first impression.",
       is_active: true,
       sort_order: 7,
       created_at: iso(-86_400_000 * 8),
@@ -233,7 +273,8 @@ function createInitialState(): PersistedState {
       image_key: "interior",
       images: ["interior", "interior-detail", "residential-interior"],
       image_captions: {},
-      description: "Elegant gypsum ceiling designs with cove lighting for living rooms, dining areas and offices.",
+      description:
+        "Elegant gypsum ceiling designs with cove lighting for living rooms, dining areas and offices.",
       is_active: true,
       sort_order: 8,
       created_at: iso(-86_400_000 * 7),
@@ -248,7 +289,8 @@ function createInitialState(): PersistedState {
       image_key: "interior",
       images: ["interior", "interior-detail", "elevation"],
       image_captions: {},
-      description: "A decorative single-leaf iron door with detailed patterns, sizes and fixing details for your fabricator.",
+      description:
+        "A decorative single-leaf iron door with detailed patterns, sizes and fixing details for your fabricator.",
       is_active: true,
       sort_order: 9,
       created_at: iso(-86_400_000 * 6),
@@ -263,7 +305,8 @@ function createInitialState(): PersistedState {
       image_key: "residential",
       images: ["residential", "floorplan", "elevation"],
       image_captions: {},
-      description: "Block layout and strengthening details for a durable, affordable house built with interlocking blocks.",
+      description:
+        "Block layout and strengthening details for a durable, affordable house built with interlocking blocks.",
       is_active: true,
       sort_order: 10,
       created_at: iso(-86_400_000 * 5),
@@ -382,7 +425,11 @@ function createInitialState(): PersistedState {
       order_id: order2Id,
       kind: "created",
       message: "Order placed",
-      detail: { amount: 14235, phone: "254723987654", designs: ["roller-castle", "ten-storey-building"] },
+      detail: {
+        amount: 14235,
+        phone: "254723987654",
+        designs: ["roller-castle", "ten-storey-building"],
+      },
       created_at: iso(-1_800_000),
     },
     {
@@ -435,13 +482,21 @@ function createInitialState(): PersistedState {
     },
   ];
 
+  const nowIso = iso(-86_400_000);
+  const role_members: RoleMember[] = [
+    { email: "oluoch542@gmail.com", role: "admin", addedBy: "system", updatedAt: nowIso },
+    { email: "oluoch540@gmail.com", role: "admin", addedBy: "system", updatedAt: nowIso },
+  ];
+
   return {
     categories,
     designs,
     orders,
     order_events,
     site_content: { ...DEFAULT_SITE_CONTENT },
-    site_updated_at: iso(-86_400_000),
+    site_updated_at: nowIso,
+    image_metadata: {},
+    role_members,
   };
 }
 
@@ -459,18 +514,45 @@ function loadPersistedState(): PersistedState {
     if (fs.existsSync(STORE_FILE)) {
       const raw = fs.readFileSync(STORE_FILE, "utf8");
       const parsed = JSON.parse(raw) as Partial<PersistedState>;
-      if (parsed && Array.isArray(parsed.designs) && Array.isArray(parsed.categories) && Array.isArray(parsed.orders)) {
+      if (
+        parsed &&
+        Array.isArray(parsed.designs) &&
+        Array.isArray(parsed.categories) &&
+        Array.isArray(parsed.orders)
+      ) {
         return {
           categories: parsed.categories,
           designs: parsed.designs.map((d) => ({
             ...d,
             images: Array.isArray(d.images) ? d.images : [],
-            image_captions: d.image_captions && typeof d.image_captions === "object" ? d.image_captions : {},
+            image_captions:
+              d.image_captions && typeof d.image_captions === "object" ? d.image_captions : {},
           })),
           orders: parsed.orders,
           order_events: Array.isArray(parsed.order_events) ? parsed.order_events : [],
           site_content: resolveSiteContent(parsed.site_content),
           site_updated_at: parsed.site_updated_at ?? new Date().toISOString(),
+          image_metadata:
+            parsed.image_metadata && typeof parsed.image_metadata === "object"
+              ? parsed.image_metadata
+              : {},
+          role_members:
+            Array.isArray(parsed.role_members) && parsed.role_members.length > 0
+              ? parsed.role_members
+              : [
+                  {
+                    email: "oluoch542@gmail.com",
+                    role: "admin",
+                    addedBy: "system",
+                    updatedAt: new Date().toISOString(),
+                  },
+                  {
+                    email: "oluoch540@gmail.com",
+                    role: "admin",
+                    addedBy: "system",
+                    updatedAt: new Date().toISOString(),
+                  },
+                ],
         };
       }
     }
@@ -612,7 +694,9 @@ export function getSiteContentState(): { content: SiteContent; updatedAt: string
 
 const DEFAULT_SEEDED_FORMATS: DownloadFormat[] = ["pdf", "dwg", "png"];
 
-export function listDesignUploadedFiles(designId: string): { name: string; path: string; format: DownloadFormat | null; size: number }[] {
+export function listDesignUploadedFiles(
+  designId: string,
+): { name: string; path: string; format: DownloadFormat | null; size: number }[] {
   ensureDirs();
   const dir = path.join(DESIGN_FILES_DIR, designId);
   if (!fs.existsSync(dir)) return [];
@@ -634,13 +718,19 @@ export function listDesignUploadedFiles(designId: string): { name: string; path:
 export function listAvailableFormats(designId: string): DownloadFormat[] {
   const uploaded = listDesignUploadedFiles(designId);
   if (uploaded.length > 0) {
-    const found = new Set(uploaded.map((f) => f.format).filter((f): f is DownloadFormat => f !== null));
+    const found = new Set(
+      uploaded.map((f) => f.format).filter((f): f is DownloadFormat => f !== null),
+    );
     return FORMAT_ORDER.filter((f) => found.has(f));
   }
   return DEFAULT_SEEDED_FORMATS;
 }
 
-export function saveUploadedDesignFile(designId: string, fileName: string, data: Uint8Array): { name: string; path: string; size: number } {
+export function saveUploadedDesignFile(
+  designId: string,
+  fileName: string,
+  data: Uint8Array,
+): { name: string; path: string; size: number } {
   ensureDirs();
   const safeName = path.basename(fileName).replace(/[^\w.\- ]+/g, "_");
   const dir = path.join(DESIGN_FILES_DIR, designId);
@@ -708,7 +798,20 @@ function mimeForFormat(fmt: DownloadFormat): string {
   }
 }
 
-export function saveUploadedImage(originalName: string, bytes: Uint8Array): string {
+export function saveUploadedImage(
+  originalName: string,
+  bytes: Uint8Array,
+  meta?: {
+    contentType?: string | undefined;
+    width?: number | null | undefined;
+    height?: number | null | undefined;
+    originalSizeBytes?: number | null | undefined;
+    optimized?: boolean | undefined;
+    watermarkText?: string | null | undefined;
+    description?: string | null | undefined;
+    designId?: string | null | undefined;
+  },
+): { storagePath: string; meta: StoredImageMeta } {
   ensureDirs();
   const ext = path.extname(originalName).toLowerCase() || ".jpg";
   const safeExt = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"].includes(ext) ? ext : ".jpg";
@@ -716,7 +819,100 @@ export function saveUploadedImage(originalName: string, bytes: Uint8Array): stri
   const full = path.join(DESIGN_IMAGES_DIR, storagePath);
   fs.mkdirSync(path.dirname(full), { recursive: true });
   fs.writeFileSync(full, bytes);
-  return storagePath;
+
+  const key = `upload:${storagePath}`;
+  const now = new Date().toISOString();
+  const record: StoredImageMeta = {
+    key,
+    storagePath,
+    fileName: path.basename(originalName),
+    contentType: meta?.contentType || "image/webp",
+    width: meta?.width ?? null,
+    height: meta?.height ?? null,
+    sizeBytes: bytes.byteLength,
+    originalSizeBytes: meta?.originalSizeBytes ?? bytes.byteLength,
+    optimized: meta?.optimized ?? false,
+    watermarkText: meta?.watermarkText?.trim() || null,
+    description: meta?.description?.trim() || null,
+    designId: meta?.designId?.trim() || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const store = getStore();
+  store.state.image_metadata[key] = record;
+  if (record.designId && record.description) {
+    const design = store.state.designs.find((d) => d.id === record.designId);
+    if (design) {
+      design.image_captions[key] = record.description;
+    }
+  }
+  savePersistedState(store.state);
+  return { storagePath, meta: record };
+}
+
+export function listImageMetadata(): StoredImageMeta[] {
+  const store = getStore();
+  return Object.values(store.state.image_metadata).sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  );
+}
+
+export function updateImageMetadata(
+  key: string,
+  patch: {
+    description?: string | null | undefined;
+    designId?: string | null | undefined;
+    watermarkText?: string | null | undefined;
+  },
+): StoredImageMeta | null {
+  const store = getStore();
+  const existing = store.state.image_metadata[key];
+  if (!existing) return null;
+  if (patch.description !== undefined) {
+    existing.description = patch.description?.trim() || null;
+  }
+  if (patch.designId !== undefined) {
+    existing.designId = patch.designId?.trim() || null;
+  }
+  if (patch.watermarkText !== undefined) {
+    existing.watermarkText = patch.watermarkText?.trim() || null;
+  }
+  existing.updatedAt = new Date().toISOString();
+  savePersistedState(store.state);
+  return existing;
+}
+
+export function deleteUploadedImage(imageKeyOrUrl: string): { removedStorage: boolean } {
+  const store = getStore();
+  const key = imageKeyOrUrl.trim();
+  let removedStorage = false;
+  if (key.startsWith("upload:")) {
+    const rel = key.slice("upload:".length);
+    const resolved = path.resolve(DESIGN_IMAGES_DIR, rel);
+    if (resolved.startsWith(path.resolve(DESIGN_IMAGES_DIR)) && fs.existsSync(resolved)) {
+      fs.unlinkSync(resolved);
+      removedStorage = true;
+    }
+  }
+  delete store.state.image_metadata[key];
+
+  for (const d of store.state.designs) {
+    if (d.images.includes(key)) {
+      d.images = d.images.filter((k) => k !== key);
+    }
+    if (d.image_captions[key]) {
+      delete d.image_captions[key];
+    }
+    if (d.image_key === key) {
+      d.image_key = d.images[0] || "residential";
+    }
+  }
+  if (store.state.site_content.heroImage === key) {
+    store.state.site_content.heroImage = null;
+  }
+  savePersistedState(store.state);
+  broadcast("catalog:update", { kind: "image_deleted", key });
+  return { removedStorage };
 }
 
 export function readUploadedImage(storagePath: string): Uint8Array | null {
@@ -724,6 +920,61 @@ export function readUploadedImage(storagePath: string): Uint8Array | null {
   if (!resolved.startsWith(path.resolve(DESIGN_IMAGES_DIR))) return null;
   if (!fs.existsSync(resolved)) return null;
   return fs.readFileSync(resolved);
+}
+
+// ===== RBAC Role Members =====
+
+export function listRoleMembers(): RoleMember[] {
+  return [...getStore().state.role_members].sort((a, b) => a.email.localeCompare(b.email));
+}
+
+export function getRoleForEmail(email: string | null | undefined): UserRole {
+  if (!email) return "user";
+  const clean = email.trim().toLowerCase();
+  if (clean === "oluoch542@gmail.com" || clean === "oluoch540@gmail.com") return "admin";
+  const found = getStore().state.role_members.find((m) => m.email.toLowerCase() === clean);
+  return found?.role ?? "user";
+}
+
+export function saveRoleMember(
+  email: string,
+  role: UserRole,
+  addedBy: string | null,
+): { ok: true; member: RoleMember } | { ok: false; message: string } {
+  const clean = email.trim().toLowerCase();
+  if (!clean || !clean.includes("@")) {
+    return { ok: false, message: "Enter a valid email address." };
+  }
+  if ((clean === "oluoch542@gmail.com" || clean === "oluoch540@gmail.com") && role !== "admin") {
+    return { ok: false, message: "Primary shop owner accounts must remain admins." };
+  }
+  const store = getStore();
+  const now = new Date().toISOString();
+  const existing = store.state.role_members.find((m) => m.email.toLowerCase() === clean);
+  if (existing) {
+    existing.role = role;
+    existing.addedBy = addedBy;
+    existing.updatedAt = now;
+    savePersistedState(store.state);
+    return { ok: true, member: existing };
+  }
+  const created: RoleMember = { email: clean, role, addedBy, updatedAt: now };
+  store.state.role_members.push(created);
+  savePersistedState(store.state);
+  return { ok: true, member: created };
+}
+
+export function deleteRoleMember(email: string): { ok: true } | { ok: false; message: string } {
+  const clean = email.trim().toLowerCase();
+  if (clean === "oluoch542@gmail.com" || clean === "oluoch540@gmail.com") {
+    return { ok: false, message: "Primary shop owner accounts cannot be removed." };
+  }
+  const store = getStore();
+  const idx = store.state.role_members.findIndex((m) => m.email.toLowerCase() === clean);
+  if (idx === -1) return { ok: false, message: "Member not found." };
+  store.state.role_members.splice(idx, 1);
+  savePersistedState(store.state);
+  return { ok: true };
 }
 
 // ===== Orders & Events =====
@@ -747,7 +998,11 @@ function appendOrderEvent(
   return evt;
 }
 
-export function createOrder(input: { phone: string; amount: number; designIds: string[] }): StoredOrder {
+export function createOrder(input: {
+  phone: string;
+  amount: number;
+  designIds: string[];
+}): StoredOrder {
   const store = getStore();
   const now = new Date().toISOString();
   const order: StoredOrder = {
@@ -787,7 +1042,19 @@ export function getOrderByCheckoutId(checkoutRequestId: string): StoredOrder | n
 
 export function updateOrder(
   orderId: string,
-  patch: Partial<Pick<StoredOrder, "status" | "checkout_request_id" | "merchant_request_id" | "mpesa_receipt" | "result_desc" | "paid_at" | "downloaded_at" | "last_query_at">>,
+  patch: Partial<
+    Pick<
+      StoredOrder,
+      | "status"
+      | "checkout_request_id"
+      | "merchant_request_id"
+      | "mpesa_receipt"
+      | "result_desc"
+      | "paid_at"
+      | "downloaded_at"
+      | "last_query_at"
+    >
+  >,
 ): StoredOrder | null {
   const store = getStore();
   const order = store.state.orders.find((o) => o.id === orderId);
@@ -798,10 +1065,15 @@ export function updateOrder(
   Object.assign(order, patch, { updated_at: new Date().toISOString() });
 
   if (order.checkout_request_id && order.checkout_request_id !== prevCheckoutId) {
-    const evt = appendOrderEvent(order.id, "prompt_sent", "M-PESA prompt sent to the buyer's phone", {
-      amount: order.amount,
-      checkout_request_id: order.checkout_request_id,
-    });
+    const evt = appendOrderEvent(
+      order.id,
+      "prompt_sent",
+      "M-PESA prompt sent to the buyer's phone",
+      {
+        amount: order.amount,
+        checkout_request_id: order.checkout_request_id,
+      },
+    );
     broadcast("order:prompt_sent", { order, event: evt });
   }
 
@@ -813,9 +1085,14 @@ export function updateOrder(
       });
       broadcast("order:paid", { order, event: evt });
     } else if (order.status === "failed") {
-      const evt = appendOrderEvent(order.id, "failed", order.result_desc || "Payment not completed", {
-        amount: order.amount,
-      });
+      const evt = appendOrderEvent(
+        order.id,
+        "failed",
+        order.result_desc || "Payment not completed",
+        {
+          amount: order.amount,
+        },
+      );
       broadcast("order:failed", { order, event: evt });
     }
   }
@@ -867,8 +1144,14 @@ export function getPaidRevenueSummary() {
   };
 }
 
-export function listFilteredOrders(filter: OrderStage | "all" | "successful", search: string): StoredOrder[] {
-  const term = search.trim().toLowerCase().replace(/[^\w+]/g, "");
+export function listFilteredOrders(
+  filter: OrderStage | "all" | "successful",
+  search: string,
+): StoredOrder[] {
+  const term = search
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w+]/g, "");
   const now = Date.now();
   return [...getStore().state.orders]
     .filter((o) => {
@@ -881,7 +1164,12 @@ export function listFilteredOrders(filter: OrderStage | "all" | "successful", se
       const localPhone = o.phone.startsWith("254") ? "0" + o.phone.slice(3) : o.phone;
       const receipt = (o.mpesa_receipt ?? "").toLowerCase();
       const ref = ("MTK" + o.id.replace(/-/g, "").slice(0, 9)).toLowerCase();
-      return o.phone.includes(term) || localPhone.includes(term) || receipt.includes(term) || ref.includes(term);
+      return (
+        o.phone.includes(term) ||
+        localPhone.includes(term) ||
+        receipt.includes(term) ||
+        ref.includes(term)
+      );
     })
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 100);
@@ -1002,7 +1290,8 @@ export function deleteDesign(designId: string): { ok: true } | { ok: false; mess
   if (usedInOrders) {
     return {
       ok: false,
-      message: "This design is part of existing orders. Hide it from the shop instead so buyers keep their downloads.",
+      message:
+        "This design is part of existing orders. Hide it from the shop instead so buyers keep their downloads.",
     };
   }
   const idx = store.state.designs.findIndex((d) => d.id === designId);
@@ -1027,7 +1316,10 @@ export function saveCategory(input: {
   if (input.originalName) {
     const existing = store.state.categories.find((c) => c.name === input.originalName);
     if (!existing) return { ok: false, message: "Category not found." };
-    if (input.originalName !== name && store.state.categories.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+    if (
+      input.originalName !== name &&
+      store.state.categories.some((c) => c.name.toLowerCase() === name.toLowerCase())
+    ) {
       return { ok: false, message: "A category with that name already exists." };
     }
     if (input.originalName !== name) {

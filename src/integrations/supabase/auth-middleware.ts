@@ -31,10 +31,11 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
   async ({ next }) => {
     const SUPABASE_URL = process.env["SUPABASE_URL"];
     const SUPABASE_PUBLISHABLE_KEY = process.env["SUPABASE_PUBLISHABLE_KEY"];
+    const SUPABASE_SERVICE_ROLE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"];
     const request = getRequest();
     const authHeader = request?.headers?.get("authorization");
 
-    if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
       if (!authHeader || authHeader !== `Bearer ${LOCAL_OWNER_TOKEN}`) {
         throw new Error("Unauthorized: Please sign in to the owner dashboard.");
       }
@@ -43,7 +44,7 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
           supabase: null as unknown as ReturnType<typeof createClient<Database>>,
           userId: "local-owner-1",
           isLocalMode: true as boolean,
-          claims: { sub: "local-owner-1" } as Record<string, unknown>,
+          claims: { sub: "local-owner-1", email: "oluoch542@gmail.com" } as Record<string, unknown>,
         },
       });
     }

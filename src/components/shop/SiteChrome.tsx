@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { LayoutDashboard } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { BasketButton } from "@/components/shop/basket";
+import { Button } from "@/components/ui/button";
 import { siteContentQuery } from "@/lib/shop-queries";
 import { DEFAULT_SITE_CONTENT, phoneHref, type SiteContent } from "@/lib/site-content";
 
@@ -34,7 +36,7 @@ export function SiteHeader({ children }: { children?: ReactNode }) {
     <>
       <AnnouncementBar text={content.announcement} />
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6">
           <Link
             to="/"
             className="flex shrink-0 items-center gap-2 font-display text-lg font-extrabold text-primary"
@@ -48,8 +50,19 @@ export function SiteHeader({ children }: { children?: ReactNode }) {
           <span className="hidden text-sm italic text-muted-foreground lg:inline">
             📍 We design anything, anywhere
           </span>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
             {children}
+            <Button
+              asChild
+              variant="soft"
+              size="sm"
+              className="h-10 shrink-0 whitespace-nowrap px-3"
+            >
+              <Link to="/admin">
+                <LayoutDashboard className="h-4 w-4" />
+                <span className="hidden sm:inline">Dashboard</span>
+              </Link>
+            </Button>
             <BasketButton />
           </div>
         </div>

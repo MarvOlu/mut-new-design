@@ -86,10 +86,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Mutken Architectural Designs" },
-      { name: "description", content: "Buy classy, affordable architectural designs and download them instantly after paying with M-PESA." },
+      {
+        name: "description",
+        content:
+          "Buy classy, affordable architectural designs and download them instantly after paying with M-PESA.",
+      },
       { name: "author", content: "Mutken Architectural Designs" },
       { property: "og:title", content: "Mutken Architectural Designs" },
-      { property: "og:description", content: "Buy architectural designs and download them instantly after paying with M-PESA." },
+      {
+        property: "og:description",
+        content: "Buy architectural designs and download them instantly after paying with M-PESA.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -165,7 +172,12 @@ function RootComponent() {
       fetch("/api/public/sessions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: sid, role: "shopper", path: window.location.pathname, basketCount }),
+        body: JSON.stringify({
+          id: sid,
+          role: "shopper",
+          path: window.location.pathname,
+          basketCount,
+        }),
       }).catch(() => {});
     };
     ping();

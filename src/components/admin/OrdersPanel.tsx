@@ -94,6 +94,7 @@ export function OrdersPanel({
   selectedOrderId,
   onSelectOrder,
   sseConnected,
+  canEdit,
 }: {
   filter: OrderFilter;
   onFilterChange: (f: OrderFilter) => void;
@@ -107,6 +108,7 @@ export function OrdersPanel({
   selectedOrderId: string | null;
   onSelectOrder: (id: string | null) => void;
   sseConnected: boolean;
+  canEdit: boolean;
 }) {
   const [drillView, setDrillView] = useState<"details" | "records">("details");
 
@@ -360,6 +362,7 @@ export function OrdersPanel({
       <OrderDrilldownSheet
         orderId={selectedOrderId}
         view={drillView}
+        canEdit={canEdit}
         onViewChange={setDrillView}
         onClose={() => onSelectOrder(null)}
       />
@@ -370,11 +373,13 @@ export function OrdersPanel({
 function OrderDrilldownSheet({
   orderId,
   view,
+  canEdit,
   onViewChange,
   onClose,
 }: {
   orderId: string | null;
   view: "details" | "records";
+  canEdit: boolean;
   onViewChange: (v: "details" | "records") => void;
   onClose: () => void;
 }) {
@@ -551,7 +556,7 @@ function OrderDrilldownSheet({
                 </ul>
               </div>
 
-              {data.order.status === "pending" && (
+              {data.order.status === "pending" && canEdit && (
                 <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
                   <p className="text-xs font-semibold text-muted-foreground">
                     Pending Payment Actions

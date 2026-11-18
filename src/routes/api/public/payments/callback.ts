@@ -16,14 +16,20 @@ export const Route = createFileRoute("/api/public/payments/callback")({
         const cb = parseStkCallback(body);
         if (!cb) return accepted();
 
-        const { isSupabaseAdminConfigured, supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { isSupabaseAdminConfigured, supabaseAdmin } =
+          await import("@/integrations/supabase/client.server");
         if (!isSupabaseAdminConfigured()) {
           const store = await import("@/lib/local-store.server");
           const order = store.getOrderByCheckoutId(cb.checkoutRequestId);
           if (!order || order.status !== "pending") return accepted();
           if (cb.resultCode === 0) {
             if (cb.amount !== undefined && Math.round(cb.amount) !== order.amount) {
-              console.error("Callback amount mismatch", cb.checkoutRequestId, cb.amount, order.amount);
+              console.error(
+                "Callback amount mismatch",
+                cb.checkoutRequestId,
+                cb.amount,
+                order.amount,
+              );
               return accepted();
             }
             store.updateOrder(order.id, {
@@ -50,7 +56,12 @@ export const Route = createFileRoute("/api/public/payments/callback")({
 
         if (cb.resultCode === 0) {
           if (cb.amount !== undefined && Math.round(cb.amount) !== order.amount) {
-            console.error("Callback amount mismatch", cb.checkoutRequestId, cb.amount, order.amount);
+            console.error(
+              "Callback amount mismatch",
+              cb.checkoutRequestId,
+              cb.amount,
+              order.amount,
+            );
             return accepted();
           }
           await supabaseAdmin

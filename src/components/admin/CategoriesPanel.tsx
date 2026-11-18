@@ -18,9 +18,11 @@ import { SHOP_KEYS } from "@/lib/admin-queries";
 export function CategoriesPanel({
   categories,
   isLoading,
+  canEdit,
 }: {
   categories: AdminCategoryRow[];
   isLoading: boolean;
+  canEdit: boolean;
 }) {
   const qc = useQueryClient();
   const saveCategory = useServerFn(adminSaveCategory);
@@ -46,6 +48,7 @@ export function CategoriesPanel({
   }
 
   async function commitOrder(next: AdminCategoryRow[]) {
+    if (!canEdit) return;
     setOrdered(next);
     try {
       await reorderCategories({ data: { orderedNames: next.map((c) => c.name) } });
@@ -57,7 +60,7 @@ export function CategoriesPanel({
   }
 
   function handleDrop(targetName: string) {
-    if (!dragName || dragName === targetName) return;
+    if (!canEdit || !dragName || dragName === targetName) return;
     const from = ordered.findIndex((c) => c.name === dragName);
     const to = ordered.findIndex((c) => c.name === targetName);
     if (from === -1 || to === -1) return;
@@ -70,6 +73,7 @@ export function CategoriesPanel({
   }
 
   function moveBy(catName: string, delta: -1 | 1) {
+    if (!canEdit) return;
     const idx = ordered.findIndex((c) => c.name === catName);
     const target = idx + delta;
     if (idx === -1 || target < 0 || target >= ordered.length) return;
@@ -81,6 +85,7 @@ export function CategoriesPanel({
   }
 
   function startEdit(c: AdminCategoryRow) {
+    if (!canEdit) return;
     setEditingOriginal(c.name);
     setName(c.name);
     setEmoji(c.emoji);
@@ -94,7 +99,7 @@ export function CategoriesPanel({
 
   async function submitForm(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!canEdit || !name.trim()) return;
     setBusy(true);
     try {
       const res = await saveCategory({
@@ -119,6 +124,7 @@ export function CategoriesPanel({
   }
 
   async function handleDelete(c: AdminCategoryRow) {
+    if (!canEdit) return;
     try {
       const res = await deleteCategory({ data: { name: c.name } });
       if (!res.ok) {
@@ -154,8 +160,8 @@ export function CategoriesPanel({
             return (
               <li
                 key={c.name}
-                draggable
-                onDragStart={() => setDragName(c.name)}
+                draggable={canEdit}
+                onDragStart={() => canEdit && setDragName(c.name)}
                 onDragOver={(e: DragEvent) => e.preventDefault()}
                 onDrop={() => handleDrop(c.name)}
                 className={`flex items-center justify-between gap-3 p-4 transition-colors ${
@@ -163,7 +169,9 @@ export function CategoriesPanel({
                 }`}
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <GripVertical className="hidden h-4 w-4 shrink-0 cursor-grab text-muted-foreground sm:block" />
+                  {canEdit && (
+                    <GripVertical className="hidden h-4 w-4 shrink-0 cursor-grab text-muted-foreground sm:block" />
+                  )}
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-secondary text-xl">
                     {c.emoji}
                   </span>
@@ -183,52 +191,54 @@ export function CategoriesPanel({
                   </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9"
-                    disabled={idx === 0}
-                    onClick={() => moveBy(c.name, -1)}
-                    aria-label={`Move ${c.name} up`}
-                  >
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9"
-                    disabled={idx === ordered.length - 1}
-                    onClick={() => moveBy(c.name, 1)}
-                    aria-label={`Move ${c.name} down`}
-                  >
-                    <ArrowDown className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9"
-                    onClick={() => startEdit(c)}
-                    aria-label={`Edit ${c.name}`}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 text-destructive hover:text-destructive"
-                    disabled={c.totalDesignCount > 0}
-                    onClick={() => handleDelete(c)}
-                    title={
-                      c.totalDesignCount > 0
-                        ? "Move designs out of this category before deleting"
-                        : "Delete category"
-                    }
-                    aria-label={`Delete ${c.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                {canEdit && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9"
+                      disabled={idx === 0}
+                      onClick={() => moveBy(c.name, -1)}
+                      aria-label={`Move ${c.name} up`}
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9"
+                      disabled={idx === ordered.length - 1}
+                      onClick={() => moveBy(c.name, 1)}
+                      aria-label={`Move ${c.name} down`}
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9"
+                      onClick={() => startEdit(c)}
+                      aria-label={`Edit ${c.name}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-destructive hover:text-destructive"
+                      disabled={c.totalDesignCount > 0}
+                      onClick={() => handleDelete(c)}
+                      title={
+                        c.totalDesignCount > 0
+                          ? "Move designs out of this category before deleting"
+                          : "Delete category"
+                      }
+                      aria-label={`Delete ${c.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </li>
             );
           })}
@@ -245,6 +255,7 @@ export function CategoriesPanel({
             <Input
               id="cat-name"
               required
+              disabled={!canEdit}
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Bungalows"
@@ -254,6 +265,7 @@ export function CategoriesPanel({
             <Label htmlFor="cat-emoji">Icon / Emoji</Label>
             <Input
               id="cat-emoji"
+              disabled={!canEdit}
               value={emoji}
               onChange={(e) => setEmoji(e.target.value)}
               placeholder="🏡"
@@ -261,7 +273,7 @@ export function CategoriesPanel({
             />
           </div>
           <div className="flex gap-2">
-            <Button type="submit" variant="cta" className="flex-1" disabled={busy}>
+            <Button type="submit" variant="cta" className="flex-1" disabled={!canEdit || busy}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               {editingOriginal ? "Save" : "Add Category"}
             </Button>
@@ -271,6 +283,11 @@ export function CategoriesPanel({
               </Button>
             )}
           </div>
+          {!canEdit && (
+            <p className="text-xs text-amber-700">
+              Read-only access: only admins can edit categories.
+            </p>
+          )}
         </form>
       </section>
     </div>

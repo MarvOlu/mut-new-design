@@ -1,6 +1,19 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { getDesignDetail, getOrderStatus, getSiteContent, listCategories, listDesigns } from "./shop.functions";
+import {
+  getBackendMode,
+  getDesignDetail,
+  getOrderStatus,
+  getSiteContent,
+  listCategories,
+  listDesigns,
+} from "./shop.functions";
+
+export const backendModeQuery = queryOptions({
+  queryKey: ["backend-mode"],
+  queryFn: () => getBackendMode(),
+  staleTime: 60_000,
+});
 
 export const designsQuery = queryOptions({
   queryKey: ["designs"],

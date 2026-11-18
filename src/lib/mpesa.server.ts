@@ -67,7 +67,11 @@ async function getAccessToken(config: Config): Promise<string> {
     );
   }
   const ttlSeconds = Number(data.expires_in) || 3599;
-  cachedToken = { key: cacheKey, token: data.access_token, expiresAt: Date.now() + (ttlSeconds - 120) * 1000 };
+  cachedToken = {
+    key: cacheKey,
+    token: data.access_token,
+    expiresAt: Date.now() + (ttlSeconds - 120) * 1000,
+  };
   return data.access_token;
 }
 
@@ -80,7 +84,13 @@ export interface StkPushResult {
 
 export async function sendStkPush(
   config: Config,
-  opts: { phone: string; amount: number; reference: string; description: string; callbackUrl: string },
+  opts: {
+    phone: string;
+    amount: number;
+    reference: string;
+    description: string;
+    callbackUrl: string;
+  },
 ): Promise<StkPushResult> {
   const token = await getAccessToken(config);
   const timestamp = nairobiTimestamp();
@@ -107,7 +117,8 @@ export async function sendStkPush(
     console.error("STK push rejected", res.status, data);
     return {
       ok: false,
-      message: data.errorMessage || data.ResponseDescription || "M-PESA could not start the payment.",
+      message:
+        data.errorMessage || data.ResponseDescription || "M-PESA could not start the payment.",
     };
   }
   return {
@@ -124,7 +135,10 @@ export type StkQueryOutcome =
   | { state: "failed"; resultDesc: string };
 
 /** Asks Daraja for the result directly — works even when the callback can't reach the app. */
-export async function queryStkStatus(config: Config, checkoutRequestId: string): Promise<StkQueryOutcome> {
+export async function queryStkStatus(
+  config: Config,
+  checkoutRequestId: string,
+): Promise<StkQueryOutcome> {
   const token = await getAccessToken(config);
   const timestamp = nairobiTimestamp();
   const res = await fetch(`${config.baseUrl}/mpesa/stkpushquery/v1/query`, {
@@ -140,7 +154,8 @@ export async function queryStkStatus(config: Config, checkoutRequestId: string):
   if (res.status === 401) cachedToken = null;
   const data = (await res.json().catch(() => ({}))) as DarajaResponse;
   // While the customer hasn't answered, Daraja replies with an error such as "transaction is being processed".
-  if (data.ResultCode === undefined || String(data.ResultCode) === "4999") return { state: "pending" };
+  if (data.ResultCode === undefined || String(data.ResultCode) === "4999")
+    return { state: "pending" };
   if (String(data.ResultCode) === "0") return { state: "paid", resultDesc: data.ResultDesc ?? "" };
   return {
     state: "failed",
